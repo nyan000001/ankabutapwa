@@ -1,0 +1,24 @@
+{
+	"name": "ankabuta pwa",
+	"start_url": "/index.html",
+	"icons": [
+		{
+			"src": "favicon.ico"
+		}
+	],
+	"share_target": {
+		"action": "/share",
+		"method": "POST",
+		"enctype": "multipart/form-data",
+		"params": {
+			"title": "name",
+			"text": "description",
+			"files": [
+				{
+					"name": "image",
+					"accept": ["image/*", "image/jpeg", "image/png", "image/gif"]
+				}
+			]
+		}
+	}
+}

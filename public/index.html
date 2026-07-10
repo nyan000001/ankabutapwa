@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<title></title>
+<style>
+:root { --color0:#fff; --color1:#000;  --color2:#ccc; --color3:#000;  --color4:#eee; --color5:#000; }
+body { background:var(--color0); color:var(--color1); }
+#sidebar { background:var(--color2); color:var(--color3); }
+#sidebar > details { border:2px solid var(--color4); margin:1px; }
+#sidebar > details > summary, .edge, #status { background:var(--color4); color:var(--color5); }
+#status { border:2px solid var(--color5); pointer-events:none; position:fixed; bottom:2px; left:2px; }
+#status:empty { display:none; }
+
+* { box-sizing:border-box; margin:0; padding:0; tab-size:2; word-break:break-word; }
+html, body, body > div { height:100%; }
+.flex { display:flex; }
+.down { flex-direction:column; }
+.stretch { flex:1; min-width:0; min-height:0; }
+details { user-select:none; }
+summary { cursor:default; white-space:pre; font-weight:bold; }
+#codeform, #code, #room, #password, #msg { flex:1; min-width:0; min-height:0; }
+textarea { resize:none; white-space:pre; }
+#status, textarea, input:not([type="color"]), summary, .edge:not(:empty), #middle { padding:6px; }
+#wrapper { overflow-y:auto; display:grid; grid-template-rows:auto 1fr auto auto; grid-template-columns:auto auto 1fr auto; }
+
+#roomform, #msgform { padding:1px; }
+#sidebar { grid-row:1 / -1; overflow-x:hidden; overflow-y:auto; resize:horizontal; width:150px; }
+#code { white-space:pre; scroll-padding:3px; }
+#roomlist > a { display:flex; padding:4px; text-decoration:none; margin:2px; }
+#roomlist > a:hover { outline:2px solid currentColor; outline-offset:-2px; }
+#roomlist > a:not(#here) > .name { text-decoration:underline; }
+#sidebar > details > div { margin:3px; }
+.count { width:20px; }
+label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
+.volume { height:10px; z-index:10000; }
+#colors { display:grid; grid-template-columns:1fr 1fr 1fr; }
+#colors > input { width:100%; }
+
+#top, #bottom, #msgform { grid-column:2 / -1; text-align:center; }
+.msg { white-space:pre-wrap; }
+#join { width:100%; height:100%; }
+#msg { field-sizing:content; min-height:30px; max-height:200px; }
+.hidden { display:none; }
+
+@media (max-height:50rem) {
+	#roomsettings:not(.hidden) ~ details { display:none; }
+}
+</style>
+</head>
+<body>
+<output id="status"></output>
+<div id="wrapper">
+	<div id="sidebar" class="flex down">
+		<form id="roomform" class="flex">
+			<input id="room">
+			<input type="submit" value="go">
+		</form>
+		<form id="codeform" class="hidden flex down">
+			<textarea id="code" spellcheck="false"></textarea>
+			<input type="submit" value="run">
+		</form>
+		<details id="roomsettings" class="hidden">
+			<summary>room settings</summary>
+			<form id="colorform" class="flex down">
+				<div id="colors">
+					<input type="color" value="#FFFFFF">
+					<input type="color" value="#000000">
+					<input type="color" value="#CCCCCC">
+					<input type="color" value="#000000">
+					<input type="color" value="#EEEEEE">
+					<input type="color" value="#000000">
+				</div>
+				<input type="submit" value="set colors">
+			</form>
+			<form id="passwordform" class="flex down">
+				<input id="password" spellcheck="false">
+				<input type="submit" value="set password">
+			</form>
+		</details>
+		<details id="personalsettings">
+			<summary>settings</summary>
+			<div id="roomaudio" class="flex down">
+				<label><input type="checkbox" class="toggle"> new room sound</label>
+				<input type="url" spellcheck="false">
+				<input type="range" min="0" max="100" class="volume">
+				<input type="button" value="play">
+			</div>
+			<div id="msgaudio" class="flex down">
+				<label><input type="checkbox" class="toggle"> new message sound</label>
+				<input type="url" spellcheck="false">
+				<input type="range" min="0" max="100" class="volume">
+				<input type="button" value="play">
+			</div>
+			<div id="notifications" class="hidden flex down">
+				<label><input type="checkbox" class="toggle"> notifications</label>
+			</div>
+		</details>
+		<details id="roomlist" open>
+			<summary>rooms</summary>
+		</details>
+	</div>
+	<div id="top" class="edge"></div>
+	<div id="left" class="edge"></div>
+	<div id="middle">
+		<input type="button" value="loading..." id="join" disabled>
+	</div>
+	<div id="right" class="edge"></div>
+	<div id="bottom" class="edge"></div>
+	<form id="msgform" class="flex">
+		<textarea id="msg"></textarea>
+		<input type="submit" value="send" id="send" disabled>
+	</form>
+</div>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const get = id => document.getElementById(id);
+get('roomform').onsubmit = e => {
+	e.preventDefault();
+	location.search = get('room').value;
+}
+const audios = {};
+for(const [id, url] of [['room', 'https://cdn.pixabay.com/audio/2022/03/10/audio_56b9fd99e8.mp3'], ['msg', 'https://www.myinstants.com/media/sounds/the-end-meow-by-nekocat-just-3-second-1.mp3']]) {
+	const [checkbox, link, volume, button] = get(id+'audio').getElementsByTagName('input');
+	audios[id] = new Audio();
+	checkbox.checked = localStorage.getItem(id) == '1';
+	volume.value = localStorage.getItem(id+'volume') ?? 50;
+	audios[id].volume = volume.value/100;
+	link.value = localStorage.getItem(id+'url') ?? url;
+	audios[id].src = link.value;
+	checkbox.oninput = e => {
+		localStorage.setItem(id, +checkbox.checked);
+		audios[id].muted = !checkbox.checked;
+	}
+	volume.oninput = e => {
+		localStorage.setItem(id+'volume', volume.value);
+		audios[id].volume = volume.value/100;
+	}
+	link.oninput = e => {
+		localStorage.setItem(id+'url', link.value);
+		audios[id].src = link.value;
+	}
+	button.onclick = () => audios[id].play();
+}
+const here = decodeURI(window.location.search.slice(1)) || 'lobby';
+document.title = here+' | ankabuta';
+const socket = io();
+let action = 'host';
+let password = false;
+socket.on('connect', () => {
+	if(action) {
+		get('join').value = action+' '+here;
+		get('join').disabled = false;
+		get('join').focus();
+	} else {
+		onbeforeunload = () => true;
+		get('status').value = '';
+		get('send').disabled = false;
+	}
+});
+socket.on('disconnect', e => {
+	console.log(e);
+	if(action) {
+		get('join').value = 'disconnected';
+		get('join').disabled = true;
+	} else {
+		onbeforeunload = () => null;
+		get('status').value = 'disconnected';
+		get('send').disabled = false;
+	}
+});
+get('join').onclick = () => {
+	if(action == 'join') {
+		socket.emit('join', password? prompt('password'): '');
+	} else {
+		socket.emit('host');
+	}
+	onbeforeunload = () => true;
+	action = '';
+	get('join').remove();
+	get('send').disabled = false;
+	socket.on('addmsgs', (msgs, side) => {
+		for(const [msg, id] of msgs) {
+			if(id != undefined && get(side+id)) {
+				get(side+id).textContent = msg;
+			} else {
+				const div = document.createElement('div');
+				div.classList.add('msg');
+				div.textContent = msg;
+				get(side).append(div);
+				div.scrollIntoView();
+				if(id != undefined) {
+					div.id = side+id;
+				}
+				if(!audios.msg.muted) {
+					audios.msg.play();
+				}
+			}
+		}
+	});
+	socket.on('removemsgs', (ids, side) => {
+		for(const id of ids) {
+			get(side+id)?.remove();
+		}		
+	});
+	socket.on('clear', sides => {
+		for(const side of sides) {
+			get(side).textContent = '';
+		}
+	});
+	socket.once('kick', reason => {
+		onbeforeunload = null;
+		socket.removeAllListeners('connect');
+		socket.removeAllListeners('disconnect');
+		get('status').value = reason;
+		get('send').disabled = true;
+	});
+}
+get('msg').onkeydown = e => {
+	if(e.key == 'Enter' && !e.shiftKey) {
+		e.preventDefault();
+		get('send').click();
+	}
+}
+socket.once('host', hash => {
+	socket.removeAllListeners('join');
+	const users = new Map([[0, hash]]);
+	get('roomform').classList.add('hidden');
+	get('codeform').classList.remove('hidden');
+	get('roomsettings').classList.remove('hidden');
+	onkeydown = e => {
+		if(e.key == 's' && e.ctrltKey) {
+			e.preventDefault();
+			get('run').click();
+		}
+	}
+	get('code').value = `
+		const defaultnames = ['Maka', 'Lea', 'Kawena', 'Kekoa', 'Waiola', 'Hanalei', 'Kamalani', 'Malina', 'Kanakanui', 'Lilinoe', 'Momi', 'Waipuna', 'Makoa', 'Kalei', 'Loke', 'Ululani', 'Kona', 'Kamaile', 'Maluhia', 'Leinani', 'Kaleinani', 'Mana', 'Kapuni', 'Kealoha', 'Kiele', 'Kulamanu', 'Mokihana', 'Kapono', 'Maunakea', 'Pauahi', 'Kaliko', 'Lei', 'Keola', 'Hualani', 'Kamalu', 'Makana', 'Haunani', 'Kaulana', 'Keahi', 'Kalua', 'Luana', 'Kainalu', 'Makanui', 'Kaimana', 'Punahele', 'Kanoa', 'Alana', 'Maile', 'Melia', 'Mililani', 'Keawe', 'Makai', 'Kailani', 'Momilani', 'Hina', 'Hanohano', 'Kalama', 'Nohea', 'Kainoa', 'Lani', 'Kapulani', 'Uluwehi', 'Kaipo', 'Onaona', 'Koa', 'Kanani', 'Lokelani', 'Pumehana', 'Lehua', 'Kekona', 'Kaluhi', 'Nahenahe', 'Lana', 'Kaihe', 'Puamana', 'Noelani', 'Kawai', 'Leihua', 'Kapua', 'Nani', 'Kaila', 'Puna', 'Kanamu', 'Mamo', 'Keona', 'Wailani', 'Ikaika', 'Aloha', 'Akoni', 'Kawelo', 'Kiani', 'Kamaka', 'Nanea', 'Mahina', 'Kahiau', 'Hekili', 'Hiapo', 'Lono', 'Kaina', 'Pua', 'Kini', 'Kaleo', 'Makamae', 'Kalena', 'Ipo', 'Leilani', 'Kahula', 'Pali', 'Leimamo', 'Keao', 'Manuia', 'Lanakila', 'Palikapu', 'Hiwahiwa', 'Kilohana', 'Keilani', 'Anuhea', 'Kalani'];
+		function join(user, msg) {
+			user.name = user.defaultname = defaultnames.shift();
+			users.send(users.map(user => [user.id+' '+user.name, user.id]), 'right');
+			users.send(user.name+' has joined');
+			user.send('welcome!');
+		}
+		function leave(user, msg) {
+			defaultnames.push(user.defaultname);
+			users.unsend(user.id, 'right');
+			users.send(user.name+' has left');
+		}
+		function hear(user, cmd, msg) {
+			if(cmd) {
+				if(['nick', 'name', 'n'].includes(cmd)) {
+					users.send(user.name+' is now known as '+msg);
+					user.name = msg;
+					users.send([[user.id+' '+user.name, user.id]], 'right');
+				} else {
+					user.send('invalid command');
+				}
+			} else {
+				users.send(user.name+': '+msg);
+			}
+		}`.slice(1).replace(/^\t{2}/gm, '');
+	get('code').focus();
+	const codes = [];
+	let worker;
+	const run = code => {
+		codes.push(code);
+		const blob = new Blob([`
+			class User {
+				constructor(id, hash) {
+					this.id = id;
+					this.hash = hash;
+				}
+				post(method, ...args) {
+					postMessage([method, [this.id], ...args]);
+				}
+			}
+			class Users extends Array {
+				static get [Symbol.species]() {
+					return Users;
+				}
+				get(val, prop = 'id') {
+					return this.find(user => user[prop] == val);
+				}
+				has(val, prop = 'id') {
+					return this.some(user => user[prop] == val);
+				}
+				post(method, ...args) {
+					postMessage([method, this.map(user => user.id), ...args]);
+				}
+			}
+			User.prototype.send = Users.prototype.send = function (msgs, side = 'middle') {
+				this.post('send', [].concat(msgs).map(msg => [].concat(msg)), side);
+			}
+			User.prototype.unsend = Users.prototype.unsend = function (msgids, side = 'middle') {
+				this.post('unsend', [].concat(msgids), side);
+			}
+			User.prototype.clear = Users.prototype.clear = function (sides = ['top', 'right', 'bottom', 'left', 'middle']) {
+				this.post('clear', [].concat(sides));
+			}
+			User.prototype.kick = Users.prototype.kick = function () {
+				this.post('kick');
+			}
+			const users = new Users();
+			${ code }
+			onmessage = e => {
+				const [action, id, data] = e.data;
+				let user = users.get(id);
+				if(action == 'join') {
+					user = new User(id, data);
+					users.push(user);
+					this.join?.(user, data);
+				} else if(!user) {
+					throw Error(action+' failed: '+id+' not found');
+				} else if(action == 'leave') {
+					users.splice(users.findIndex(user => user.id == id), 1);
+					this.leave?.(user);
+				} else {
+					let cmd = '';
+					let msg = data;
+					if(data[0] == '/') {
+						[cmd, msg = ''] = data.slice(1).split(/ (.*)/);
+					}
+					this.hear?.(user, cmd, msg);
+				}
+			}`.slice(1).replace(/^\t{3}/gm, '')
+		]);
+		const blobURL = (URL ?? webkitURL).createObjectURL(blob, { type: 'application/javascript; charset=utf-8' });
+		worker = new Worker(blobURL);
+		worker.onmessage = e => {
+			socket.emit(...e.data);
+		}
+		worker.onerror = e => {
+			get('code').style.backgroundColor = '#f00';
+			codes.pop();
+			if(codes.length) {
+				run(codes.at(-1));
+			}
+		}
+		socket.emit('clear', [...users.keys()], ['top', 'right', 'bottom', 'left', 'middle']);
+		users.forEach((hash, id) => worker.postMessage(['join', id, hash]));
+	}
+	run(get('code').value);
+	get('codeform').onsubmit = e => {
+		e.preventDefault();
+		get('code').style.backgroundColor = null;
+		run(get('code').value);
+		get('code').focus();
+	}
+	get('msgform').onsubmit = e => {
+		e.preventDefault();
+		console.log('0: '+msg.value);
+		worker.postMessage(['hear', 0, get('msg').value]);
+		get('msg').value = '';
+		get('msg').focus();
+	}
+	get('colorform').onsubmit = e => {
+		e.preventDefault();
+		socket.emit('setcolors', [...get('colors').children].map(input => input.value));
+	}
+	get('passwordform').onsubmit = e => {
+		e.preventDefault();
+		socket.emit('setpassword', get('password').value);
+	}
+	socket.on('hear', (id, msg) => {
+		console.log(id+': '+msg);
+		worker.postMessage(['hear', id, msg]);
+	});
+	socket.on('adduser', (id, hash) => {
+		console.log(id+' has joined');
+		users.set(id, hash);
+		worker.postMessage(['join', id, hash]);
+	});
+	socket.on('removeuser', id => {
+		console.log(id+' has left');
+		worker.postMessage(['leave', id]);
+		users.delete(id);
+	});
+	socket.on('error', error => console.warn(error));
+});
+socket.once('join', () => {
+	socket.removeAllListeners('host');
+	get('msg').focus();
+	get('msgform').onsubmit = e => {
+		e.preventDefault();
+		socket.emit('say', get('msg').value);
+		get('msg').value = '';
+		get('msg').focus();
+	}
+});
+socket.once('hi', async (rooms, key) => {
+	rooms = new Map(rooms);
+	const setcolors = (name, colors) => {
+		const a = rooms.get(name);
+		a.style.backgroundColor = colors[0];
+		a.style.color = colors[1];
+		a.style.borderColor = colors[4];
+		if(name == here) {
+			for(let i = 0; i < 6; i++) {
+				document.documentElement.style.setProperty('--color'+i, colors[i]);
+			}
+		}
+	}
+	socket.on('setcolors', setcolors);
+	socket.on('setcount', (name, count) => {
+		rooms.get(name).children[0].textContent = count;
+	});
+	socket.on('setlock', (name, locked) => {
+		rooms.get(name).children[1].textContent = locked? '🔒': '';
+		if(name == here) {
+			password = locked;
+		}
+	});
+	const addroom = (name, room) => {
+		const a = document.createElement('a');
+		for(let i = 0; i < 3; i++) {
+			const span = document.createElement('span');
+			span.textContent = [room.count, name, room.locked? '🔒': ''][i];
+			span.classList.add(['count', 'name', 'lock'][i]);
+			a.append(span);
+		}
+		a.href = '?'+name;
+		if(name == here) {
+			a.id = 'here';
+			if(action) {
+				action = 'join';
+				get('join').value = 'join '+here;
+			}
+		}
+		get('roomlist').append(a);
+		rooms.set(name, a);
+		setcolors(name, room.colors);
+	}
+	rooms.forEach((room, name) => addroom(name, room));
+	socket.on('addroom', (name, room) => {
+		addroom(name, room);
+		if(!audios.room.muted) {
+			audios.room.play();
+		}
+	});
+	socket.on('removeroom', (name, count) => {
+		if(name == here && action) {
+			action = 'host';
+			get('join').value = 'host '+here;
+		}
+		rooms[name]?.remove();
+		delete rooms[name];
+	});
+	if(!('serviceWorker' in navigator)) return;
+	const registration = await navigator.serviceWorker.register('/sw.js');
+	if(!('PushManager' in window) || Notification.permission == 'denied') return;
+	get('notifications').classList.remove('hidden');
+	let subscription = await registration.pushManager.getSubscription();
+	const checkbox = get('notifications').getElementsByTagName('input')[0];
+	checkbox.checked = Boolean(subscription);
+	const channel = new BroadcastChannel('subscription');
+	channel.onmessage = e => checkbox.checked = e.data.status == 'subscribed';
+	const f = url => {
+		fetch(url, {
+			method:'POST',
+			headers:{ 'Content-Type': 'application/json' },
+			body:JSON.stringify(subscription),
+		});
+	}
+	checkbox.oninput = async () => {
+		checkbox.disabled = true;
+		if(checkbox.checked && !subscription) {
+			const permission = await Notification.requestPermission();
+			if(permission != 'granted') {
+				checkbox.checked = false;
+				return;
+			}
+			subscription = await registration.pushManager.subscribe({
+				userVisibleOnly:true,
+				applicationServerKey:Uint8Array.fromBase64(key, { alphabet:'base64url' })
+			});
+			await f('/subscribe');
+			channel.postMessage({ status:'subscribed' });
+		} else if(!checkbox.checked && subscription) {
+			await f('/unsubscribe');
+			await subscription.unsubscribe();
+			subscription = null;
+			channel.postMessage({ status:'unsubscribed' });
+		}
+		checkbox.disabled = false;
+	}
+});
+</script>
+</body>
+</html>
