@@ -36,9 +36,12 @@ const io = require('socket.io')(server, { connectionStateRecovery:{ maxDisconnec
 const defaultcolors = ['#fff', '#000', '#ccc', '#000', '#eee', '#000'];
 const rooms = new Map([['lobby', { users:new Map(), password:'', colors:defaultcolors }]]);
 const hashes = new Map();
+const timeouts = new Map();
 io.on('connection', socket => {
 	const roomname = decodeURI(socket.handshake.headers.referer).match(/\?(.+)/)?.[1] || 'lobby';
 	if(socket.data.userid > -1) {
+		clearTimeout(timeouts.get(socket.id));
+		timeouts.delete(socket.id);
 		const room = rooms.get(roomname);
 		if(!room) return;
 		if(room.host == socket.id) {
@@ -108,13 +111,21 @@ io.on('connection', socket => {
 			}
 		});
 		socket.once('disconnect', reason => {
-			users.delete(userid);
-			io.emit('setcount', roomname, users.size);
-			if(roomname == 'lobby') {
-				io.to('?lobby').emit('addmsgs', [[userid+' has left']], 'middle');
-				io.to('?lobby').emit('addmsgs', [[[...users.keys()].join('\n'), 'users']], 'right');
+			const die = () => {
+				timeouts.delete(socket.id);
+				users.delete(userid);
+				io.emit('setcount', roomname, users.size);
+				if(roomname == 'lobby') {
+					io.to('?lobby').emit('addmsgs', [[userid+' has left']], 'middle');
+					io.to('?lobby').emit('addmsgs', [[[...users.keys()].join('\n'), 'users']], 'right');
+				} else {
+					io.to(room.host).emit('removeuser', userid);
+				}
+			};
+			if(reason.includes('disconnect')) {
+				die();
 			} else {
-				io.to(room.host).emit('removeuser', userid);
+				timeouts.set(socket.id, setTimeout(die, 60000));
 			}
 		});
 	}
@@ -155,10 +166,18 @@ io.on('connection', socket => {
 			kick(userids, 'kicked');
 		});
 		socket.once('disconnect', reason => {
-			users.delete(0);
-			kick([...users.keys()], 'admin has disconnected');
-			rooms.delete(roomname);
-			io.emit('removeroom', roomname);
+			const die = () => {
+				timeouts.delete(socket.id);
+				users.delete(0);
+				kick([...users.keys()], 'admin has disconnected');
+				rooms.delete(roomname);
+				io.emit('removeroom', roomname);
+			};
+			if(reason.includes('disconnect')) {
+				die();
+			} else {
+				timeouts.set(socket.id, setTimeout(die, 60000));
+			}
 		});
 		socket.on('send', (userids, msgs, side) => {
 			for(const userid of userids) {
