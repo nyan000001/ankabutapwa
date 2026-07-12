@@ -5,11 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
 <title></title>
 <style>
-:root { --color0:#fff; --color1:#000;  --color2:#ccc; --color3:#000;  --color4:#eee; --color5:#000; }
-body { background:var(--color0); color:var(--color1); }
-#sidebar { background:var(--color2); color:var(--color3); }
-#sidebar > details { border:2px solid var(--color4); margin:1px; }
-#sidebar > details > summary, .edge, #status { background:var(--color4); color:var(--color5); }
+:root { --color0:#ccc; --color1:#000;  --color2:#fff; --color3:#000;  --color4:#eee; --color5:#000; }
+body { background:var(--color2); color:var(--color3); }
+#sidebar { background:var(--color0); color:var(--color1); }
+#sidebar > details { border:2px solid var(--color1); margin:1px; }
+#sidebar > details > summary { background:var(--color1); color:var(--color0); }
+.edge, #status, #msgform { background:var(--color4); color:var(--color5); }
 #status { border:2px solid var(--color5); pointer-events:none; position:fixed; bottom:2px; left:2px; }
 #status:empty { display:none; }
 
@@ -23,10 +24,10 @@ summary { cursor:default; white-space:pre; font-weight:bold; }
 #codeform, #code, #room, #password, #msg { flex:1; min-width:0; min-height:0; }
 textarea { resize:none; }
 #status, textarea, input:not([type="color"]), summary, .edge:not(:empty), #middle { padding:6px; }
-#wrapper { overflow-y:auto; display:grid; grid-template-rows:auto 1fr auto auto; grid-template-columns:auto auto 1fr auto; }
+#wrapper { display:grid; grid-template-rows:auto 1fr auto auto; grid-template-columns:auto auto 1fr auto; }
 
 #roomform, #msgform { padding:1px; }
-#sidebar { grid-row:1 / -1; overflow-x:hidden; overflow-y:auto; resize:horizontal; width:150px; }
+#sidebar { grid-row:1 / -1; overflow-x:hidden; resize:horizontal; width:150px; }
 #code { white-space:pre; scroll-padding:3px; }
 #roomlist > a { display:flex; padding:4px; text-decoration:none; margin:2px; }
 #roomlist > a:hover { outline:2px solid currentColor; outline-offset:-2px; }
@@ -35,17 +36,16 @@ textarea { resize:none; }
 .count { width:20px; }
 label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 .volume { height:10px; z-index:10000; }
-#colors { display:grid; grid-template-columns:1fr 1fr 1fr; }
+#colors { display:grid; grid-template-rows:repeat(2, auto); grid-auto-flow:column; }
 #colors > input { width:100%; }
 
 #top, #bottom, #msgform { grid-column:2 / -1; text-align:center; }
-#middle { overflow-y:auto; }
 .msg { white-space:pre-wrap; }
 #join { width:100%; height:100%; }
 #msg { field-sizing:content; min-height:30px; max-height:200px; }
 .hidden { display:none; }
 
-@media (max-height:50rem) {
+@media (max-height:20rem) {
 	#roomsettings:not(.hidden) ~ details { display:none; }
 }
 </style>
@@ -53,7 +53,7 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 <body>
 <output id="status"></output>
 <div id="wrapper">
-	<div id="sidebar" class="flex down">
+	<div id="sidebar" class="flex down scrollable">
 		<form id="roomform" class="flex">
 			<input id="room">
 			<input type="submit" value="go">
@@ -66,9 +66,9 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 			<summary>room settings</summary>
 			<form id="colorform" class="flex down">
 				<div id="colors">
-					<input type="color" value="#FFFFFF">
-					<input type="color" value="#000000">
 					<input type="color" value="#CCCCCC">
+					<input type="color" value="#000000">
+					<input type="color" value="#FFFFFF">
 					<input type="color" value="#000000">
 					<input type="color" value="#EEEEEE">
 					<input type="color" value="#000000">
@@ -103,11 +103,11 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 		</details>
 	</div>
 	<div id="top" class="edge flex"></div>
-	<div id="left" class="edge"></div>
-	<div id="middle">
+	<div id="left" class="edge scrollable"></div>
+	<div id="middle" class="scrollable">
 		<input type="button" value="loading..." id="join" disabled>
 	</div>
-	<div id="right" class="edge"></div>
+	<div id="right" class="edge scrollable"></div>
 	<div id="bottom" class="edge flex"></div>
 	<form id="msgform" class="flex">
 		<textarea id="msg"></textarea>
@@ -141,8 +141,8 @@ ontouchstart = e => {
 		}
 	}
 }
+onsubmit = e => e.preventDefault();
 get('roomform').onsubmit = e => {
-	e.preventDefault();
 	location.search = get('room').value;
 }
 const audios = {};
@@ -170,29 +170,27 @@ for(const [id, url] of [['room', 'https://cdn.pixabay.com/audio/2022/03/10/audio
 }
 const here = decodeURI(window.location.search.slice(1)) || 'lobby';
 document.title = here+' | ankabuta';
-const socket = io();
 let action = 'host';
 let password = false;
+const socket = io();
 socket.on('connect', () => {
+	get('status').value = '';
 	if(action) {
-		get('join').value = action+' '+here;
 		get('join').disabled = false;
 		get('join').focus();
 	} else {
 		onbeforeunload = () => true;
-		get('status').value = '';
 		get('send').disabled = false;
 	}
 });
 socket.on('disconnect', e => {
 	console.log(e);
+	get('status').value = 'disconnected';
 	if(action) {
-		get('join').value = 'disconnected';
 		get('join').disabled = true;
 	} else {
 		onbeforeunload = () => null;
-		get('status').value = 'disconnected';
-		get('send').disabled = false;
+		get('send').disabled = true;
 	}
 });
 get('join').onclick = () => {
@@ -202,6 +200,7 @@ get('join').onclick = () => {
 		socket.emit('host');
 	}
 	onbeforeunload = () => true;
+	onunload = () => socket.disconnect();
 	action = '';
 	get('join').remove();
 	get('send').disabled = false;
@@ -264,21 +263,26 @@ socket.once('host', hash => {
 		const defaultnames = ['Maka', 'Lea', 'Kawena', 'Kekoa', 'Waiola', 'Hanalei', 'Kamalani', 'Malina', 'Kanakanui', 'Lilinoe', 'Momi', 'Waipuna', 'Makoa', 'Kalei', 'Loke', 'Ululani', 'Kona', 'Kamaile', 'Maluhia', 'Leinani', 'Kaleinani', 'Mana', 'Kapuni', 'Kealoha', 'Kiele', 'Kulamanu', 'Mokihana', 'Kapono', 'Maunakea', 'Pauahi', 'Kaliko', 'Lei', 'Keola', 'Hualani', 'Kamalu', 'Makana', 'Haunani', 'Kaulana', 'Keahi', 'Kalua', 'Luana', 'Kainalu', 'Makanui', 'Kaimana', 'Punahele', 'Kanoa', 'Alana', 'Maile', 'Melia', 'Mililani', 'Keawe', 'Makai', 'Kailani', 'Momilani', 'Hina', 'Hanohano', 'Kalama', 'Nohea', 'Kainoa', 'Lani', 'Kapulani', 'Uluwehi', 'Kaipo', 'Onaona', 'Koa', 'Kanani', 'Lokelani', 'Pumehana', 'Lehua', 'Kekona', 'Kaluhi', 'Nahenahe', 'Lana', 'Kaihe', 'Puamana', 'Noelani', 'Kawai', 'Leihua', 'Kapua', 'Nani', 'Kaila', 'Puna', 'Kanamu', 'Mamo', 'Keona', 'Wailani', 'Ikaika', 'Aloha', 'Akoni', 'Kawelo', 'Kiani', 'Kamaka', 'Nanea', 'Mahina', 'Kahiau', 'Hekili', 'Hiapo', 'Lono', 'Kaina', 'Pua', 'Kini', 'Kaleo', 'Makamae', 'Kalena', 'Ipo', 'Leilani', 'Kahula', 'Pali', 'Leimamo', 'Keao', 'Manuia', 'Lanakila', 'Palikapu', 'Hiwahiwa', 'Kilohana', 'Keilani', 'Anuhea', 'Kalani'];
 		function join(user, msg) {
 			user.name = user.defaultname = defaultnames.shift();
-			users.send(users.map(user => [user.id+' '+user.name, user.id]), 'right');
+			users.sendright(users.map(user => [user.id+' '+user.name, user.id]));
 			users.send(user.name+' has joined');
-			user.send('welcome!');
 		}
 		function leave(user, msg) {
 			defaultnames.push(user.defaultname);
-			users.unsend(user.id, 'right');
+			users.unsendright(user.id);
 			users.send(user.name+' has left');
+		}
+		function online(user) {
+			users.sendright(user.id+' '+user.name, user.id);
+		}
+		function offline(user) {
+			users.sendright(user.id+' ('+user.name+')', user.id);
 		}
 		function hear(user, cmd, msg) {
 			if(cmd) {
 				if(['nick', 'name', 'n'].includes(cmd)) {
 					users.send(user.name+' is now known as '+msg);
 					user.name = msg;
-					users.send([[user.id+' '+user.name, user.id]], 'right');
+					users.sendright(user.id+' '+user.name, user.id);
 				} else {
 					user.send('invalid command');
 				}
@@ -297,8 +301,8 @@ socket.once('host', hash => {
 					this.id = id;
 					this.hash = hash;
 				}
-				post(method, ...args) {
-					postMessage([method, [this.id], ...args]);
+				post(action, ...args) {
+					postMessage([action, [this.id], ...args]);
 				}
 			}
 			class Users extends Array {
@@ -311,18 +315,20 @@ socket.once('host', hash => {
 				has(val, prop = 'id') {
 					return this.some(user => user[prop] == val);
 				}
-				post(method, ...args) {
-					postMessage([method, this.map(user => user.id), ...args]);
+				post(action, ...args) {
+					postMessage([action, this.map(user => user.id), ...args]);
 				}
 			}
-			User.prototype.send = Users.prototype.send = function (msgs, side = 'middle') {
-				this.post('send', [].concat(msgs).map(msg => [].concat(msg)), side);
-			}
-			User.prototype.unsend = Users.prototype.unsend = function (msgids, side = 'middle') {
-				this.post('unsend', [].concat(msgids), side);
-			}
-			User.prototype.clear = Users.prototype.clear = function (sides = ['top', 'right', 'bottom', 'left', 'middle']) {
-				this.post('clear', [].concat(sides));
+			for(const side of ['top', 'right', 'bottom', 'left', 'middle', '']) {
+				User.prototype['send'+side] = Users.prototype['send'+side] = function (msg, msgid) {
+					this.post('send', [].concat(msg).map(msg => [].concat(msg, msgid ?? []).slice(0, 2)), side || 'middle');
+				}
+				User.prototype['unsend'+side] = Users.prototype['unsend'+side] = function (msgids) {
+					this.post('unsend', [].concat(msgids), side || 'middle');
+				}
+				User.prototype['clear'+side] = Users.prototype['clear'+side] = function () {
+					this.post('clear', side? [side]: ['top', 'right', 'bottom', 'left', 'middle']);
+				}
 			}
 			User.prototype.kick = Users.prototype.kick = function () {
 				this.post('kick');
@@ -341,13 +347,15 @@ socket.once('host', hash => {
 				} else if(action == 'leave') {
 					users.splice(users.findIndex(user => user.id == id), 1);
 					this.leave?.(user);
-				} else {
+				} else if(action == 'hear') {
 					let cmd = '';
 					let msg = data;
 					if(data[0] == '/') {
 						[cmd, msg = ''] = data.slice(1).split(/ (.*)/);
 					}
 					this.hear?.(user, cmd, msg);
+				} else {
+					this[action]?.(user);
 				}
 			}`.slice(1).replace(/^\t{3}/gm, '')
 		]);
@@ -368,24 +376,21 @@ socket.once('host', hash => {
 	}
 	run(get('code').value);
 	get('codeform').onsubmit = e => {
-		e.preventDefault();
 		get('code').style.backgroundColor = null;
 		run(get('code').value);
 		get('code').focus();
 	}
 	get('msgform').onsubmit = e => {
-		e.preventDefault();
+		if(!get('msg').value) return;
 		console.log('0: '+msg.value);
 		worker.postMessage(['hear', 0, get('msg').value]);
 		get('msg').value = '';
 		get('msg').focus();
 	}
 	get('colorform').onsubmit = e => {
-		e.preventDefault();
 		socket.emit('setcolors', [...get('colors').children].map(input => input.value));
 	}
 	get('passwordform').onsubmit = e => {
-		e.preventDefault();
 		socket.emit('setpassword', get('password').value);
 	}
 	socket.on('hear', (id, msg) => {
@@ -402,13 +407,20 @@ socket.once('host', hash => {
 		worker.postMessage(['leave', id]);
 		users.delete(id);
 	});
+	socket.on('online', id => worker.postMessage(['online', id]));
+	socket.on('offline', id => worker.postMessage(['offline', id]));
 	socket.on('error', error => console.warn(error));
+	get('colors').oncontextmenu = e => {
+		if(e.target.type != 'color') return;
+		e.preventDefault();
+		e.target.value = '#'+Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+	}
 });
 socket.once('join', () => {
 	socket.removeAllListeners('host');
 	get('msg').focus();
 	get('msgform').onsubmit = e => {
-		e.preventDefault();
+		if(!get('msg').value) return;
 		socket.emit('say', get('msg').value);
 		get('msg').value = '';
 		get('msg').focus();
@@ -418,9 +430,8 @@ socket.once('hi', async (rooms, key) => {
 	rooms = new Map(rooms);
 	const setcolors = (name, colors) => {
 		const a = rooms.get(name);
-		a.style.backgroundColor = colors[0];
-		a.style.color = colors[1];
-		a.style.borderColor = colors[4];
+		a.style.backgroundColor = colors[2];
+		a.style.color = colors[3];
 		if(name == here) {
 			for(let i = 0; i < 6; i++) {
 				document.documentElement.style.setProperty('--color'+i, colors[i]);
@@ -432,7 +443,7 @@ socket.once('hi', async (rooms, key) => {
 		rooms.get(name).children[0].textContent = count;
 	});
 	socket.on('setlock', (name, locked) => {
-		rooms.get(name).children[1].textContent = locked? '🔒': '';
+		rooms.get(name).children[2].textContent = locked? '🔒': '';
 		if(name == here) {
 			password = locked;
 		}
@@ -458,6 +469,9 @@ socket.once('hi', async (rooms, key) => {
 		setcolors(name, room.colors);
 	}
 	rooms.forEach((room, name) => addroom(name, room));
+	if(action == 'host') {
+		get('join').value = 'host '+here;
+	}
 	socket.on('addroom', (name, room) => {
 		addroom(name, room);
 		if(!audios.room.muted) {
