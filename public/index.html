@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
-<title></title>
+<title>ankabuta pwa</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
 <style>
 :root { --color0:#ccc; --color1:#000;  --color2:#fff; --color3:#000;  --color4:#eee; --color5:#000; }
 body { background:var(--color2); color:var(--color3); }
@@ -28,7 +29,8 @@ textarea { resize:none; }
 
 #roomform, #msgform { padding:1px; }
 #sidebar { grid-row:1 / -1; overflow-x:hidden; resize:horizontal; width:150px; }
-#code { white-space:pre; scroll-padding:3px; }
+#code, #style textarea { white-space:pre; scroll-padding:3px; }
+#style textarea, #msg { field-sizing:content; }
 #roomlist > a { display:flex; padding:4px; text-decoration:none; margin:2px; }
 #roomlist > a:hover { outline:2px solid currentColor; outline-offset:-2px; }
 #roomlist > a:not(#here) > .name { text-decoration:underline; }
@@ -42,13 +44,14 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 #top, #bottom, #msgform { grid-column:2 / -1; text-align:center; }
 .msg { white-space:pre-wrap; }
 #join { width:100%; height:100%; }
-#msg { field-sizing:content; min-height:30px; max-height:200px; }
+#msg { min-height:30px; max-height:200px; }
 .hidden { display:none; }
 
 @media (max-height:20rem) {
 	#roomsettings:not(.hidden) ~ details { display:none; }
 }
 </style>
+<link rel="manifest" href="manifest.json">
 </head>
 <body>
 <output id="status"></output>
@@ -80,7 +83,10 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 				<input type="submit" value="set password">
 			</form>
 		</details>
-		<details id="personalsettings">
+		<details id="roomlist" open>
+			<summary>rooms</summary>
+		</details>
+		<details id="personalsettings" open>
 			<summary>settings</summary>
 			<div id="roomaudio" class="flex down">
 				<label><input type="checkbox" class="toggle"> new room sound</label>
@@ -94,12 +100,13 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 				<input type="range" min="0" max="100" class="volume">
 				<input type="button" value="play">
 			</div>
+			<div id="style" class="flex down">
+				<label><input type="checkbox" class="toggle"> override styles</label>
+				<textarea spellcheck="false"></textarea>
+			</div>
 			<div id="notifications" class="hidden flex down">
 				<label><input type="checkbox" class="toggle"> notifications</label>
 			</div>
-		</details>
-		<details id="roomlist" open>
-			<summary>rooms</summary>
 		</details>
 	</div>
 	<div id="top" class="edge flex"></div>
@@ -145,26 +152,40 @@ onsubmit = e => e.preventDefault();
 get('roomform').onsubmit = e => {
 	location.search = get('room').value;
 }
+const checkbox = document.querySelector('#style input');
+const textarea = document.querySelector('#style textarea');
+const style = localStorage.getItem('style') ?? '* {\n	--color0: black;\n	--color1: white;\n	--color2: black;\n	--color3: white;\n	--color4: black;\n	--color5: white;\n}';
+checkbox.checked = style[0] == ' ';
+textarea.value = style.trim();
+let stylesheet;
+const update = () => {
+	stylesheet ??= document.createElement('style');
+	stylesheet.textContent = textarea.value;
+	if(checkbox.checked) {
+		document.head.append(stylesheet);
+	} else {
+		stylesheet.remove();
+	}
+}
+update();
+get('style').oninput = () => {
+	localStorage.setItem('style', (checkbox.checked? ' ': '')+textarea.value);
+	update();
+}
 const audios = {};
 for(const [id, url] of [['room', 'https://cdn.pixabay.com/audio/2022/03/10/audio_56b9fd99e8.mp3'], ['msg', 'https://www.myinstants.com/media/sounds/the-end-meow-by-nekocat-just-3-second-1.mp3']]) {
-	const [checkbox, link, volume, button] = get(id+'audio').getElementsByTagName('input');
-	audios[id] = new Audio();
-	checkbox.checked = localStorage.getItem(id) == '1';
-	volume.value = localStorage.getItem(id+'volume') ?? 50;
-	audios[id].volume = volume.value/100;
-	link.value = localStorage.getItem(id+'url') ?? url;
-	audios[id].src = link.value;
-	checkbox.oninput = e => {
-		localStorage.setItem(id, +checkbox.checked);
-		audios[id].muted = !checkbox.checked;
+	const [checkbox, link, volume, button] = document.querySelectorAll('#'+id+'audio input');
+	const audio = audios[id] = new Audio();
+	[checkbox.checked, link.value, volume.value] = (localStorage.getItem(id) ?? ' |'+url+'|50').split('|');
+	const update = () => {
+		audio.muted = !checkbox.checked;
+		audio.volume = volume.value/100;
+		audio.src = link.value;
 	}
-	volume.oninput = e => {
-		localStorage.setItem(id+'volume', volume.value);
-		audios[id].volume = volume.value/100;
-	}
-	link.oninput = e => {
-		localStorage.setItem(id+'url', link.value);
-		audios[id].src = link.value;
+	update();
+	get(id).oninput = e => {
+		localStorage.setItem(id, [checkbox.checked? ' ': '', url.value, volume.value].join('|'));
+		update();
 	}
 	button.onclick = () => audios[id].play();
 }
@@ -248,11 +269,18 @@ get('msg').onkeydown = e => {
 	}
 }
 socket.once('host', hash => {
+	if(checkbox.checked) {
+		checkbox.click();
+	}
 	socket.removeAllListeners('join');
 	const users = new Map([[0, hash]]);
 	get('roomform').classList.add('hidden');
 	get('codeform').classList.remove('hidden');
 	get('roomsettings').classList.remove('hidden');
+	get('roomlist').open = get('personalsettings').open = false;
+	if(innerHeight > 600) {
+		get('roomsettings').open = true;
+	}
 	onkeydown = e => {
 		if(e.key == 's' && e.ctrltKey) {
 			e.preventDefault();
@@ -491,7 +519,7 @@ socket.once('hi', async (rooms, key) => {
 	if(!('PushManager' in window) || Notification.permission == 'denied') return;
 	get('notifications').classList.remove('hidden');
 	let subscription = await registration.pushManager.getSubscription();
-	const checkbox = get('notifications').getElementsByTagName('input')[0];
+	const checkbox = document.querySelector('#notifications input');
 	checkbox.checked = Boolean(subscription);
 	const channel = new BroadcastChannel('subscription');
 	channel.onmessage = e => checkbox.checked = e.data.status == 'subscribed';
