@@ -38,7 +38,7 @@ const rooms = new Map([
 	['lobby', {
 		users:new Map(), password:'', colors:defaultcolors, emit:function (action, userid, ...args) {
 			if(action == 'adduser') {
-				io.to('?lobby').emit('addmsgs', [...this.users.keys()].map(id => [id, id]), 'right');
+				io.to('?lobby').emit('addmsgs', [...this.users.keys()].map(id => [id.toString(), id.toString()]), 'right');
 			} else if(action == 'removeuser') {
 				io.to('?lobby').emit('removemsgs', [[userid]], 'right');
 			} else if(action == 'online') {
@@ -46,7 +46,7 @@ const rooms = new Map([
 			} else if(action == 'offline') {
 				io.to('?lobby').emit('addmsgs', [['('+userid+')', userid]], 'right');
 			} else if(action == 'hear') {
-				io.to('?lobby').emit('addmsgs', [[userid+': '+args[0]]], 'middle');
+				io.to('?lobby').emit('addmsgs', [['[*'+userid+'*]: '+args[0]]], 'middle');
 			}
 		}
 	}]
