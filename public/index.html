@@ -3,13 +3,15 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<meta name="description" content="Create a chatroom with your own code or join other people's rooms">
+</head>
 <title>ankabuta pwa</title>
 <link rel="icon" type="image/x-icon" href="favicon.ico">
 <style>
 :root { --color0:#ccc; --color1:#000;  --color2:#fff; --color3:#000;  --color4:#eee; --color5:#000; }
 body { background:var(--color2); color:var(--color3); }
 #sidebar { background:var(--color0); color:var(--color1); }
-#sidebar > details { border:2px solid var(--color1); margin-top:2px; }
+#sidebar > details { border:2px solid var(--color1); margin:1px 2px 1px 2px; }
 #sidebar > details > summary { background:var(--color1); color:var(--color0); }
 .edge, #status, #buttons, #msgform { background:var(--color4); color:var(--color5); }
 #status { border:2px solid var(--color5); pointer-events:none; position:fixed; bottom:2px; left:2px; }
@@ -66,6 +68,7 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 }
 </style>
 <link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon192.png">
 </head>
 <body>
 <output id="status"></output>
@@ -128,9 +131,9 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 	</div>
 	<div id="top" class="edge flex"></div>
 	<div id="left" class="edge scrollable"></div>
-	<div id="middle" class="scrollable">
+	<main id="middle" class="scrollable">
 		<input type="button" value="loading..." id="join" disabled>
-	</div>
+	</main>
 	<div id="right" class="edge scrollable"></div>
 	<div id="bottom" class="edge flex"></div>
 	<div id="buttons" class="flex">
