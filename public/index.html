@@ -9,14 +9,16 @@
 :root { --color0:#ccc; --color1:#000;  --color2:#fff; --color3:#000;  --color4:#eee; --color5:#000; }
 body { background:var(--color2); color:var(--color3); }
 #sidebar { background:var(--color0); color:var(--color1); }
-#sidebar > details { border:2px solid var(--color1); margin:1px; }
+#sidebar > details { border:2px solid var(--color1); margin-top:2px; }
 #sidebar > details > summary { background:var(--color1); color:var(--color0); }
-.edge, #status, #msgform { background:var(--color4); color:var(--color5); }
+.edge, #status, #buttons, #msgform { background:var(--color4); color:var(--color5); }
 #status { border:2px solid var(--color5); pointer-events:none; position:fixed; bottom:2px; left:2px; }
 #status:empty { display:none; }
 
-* { box-sizing:border-box; margin:0; padding:0; tab-size:2; word-break:break-word; }
+* { box-sizing:border-box; margin:0; padding:0; tab-size:2; word-break:break-word; font-size:16px; }
 html, body, body > div { height:100%; }
+.scrollable { overflow-y:auto; }
+.grid { display:grid; }
 .flex { display:flex; }
 .down { flex-direction:column; }
 .stretch { flex:1; min-width:0; min-height:0; }
@@ -25,28 +27,39 @@ summary { cursor:default; white-space:pre; font-weight:bold; }
 #codeform, #code, #room, #password, #msg { flex:1; min-width:0; min-height:0; }
 textarea { resize:none; }
 #status, textarea, input:not([type="color"]), summary, .edge:not(:empty), #middle { padding:6px; }
-#wrapper { display:grid; grid-template-rows:auto 1fr auto auto; grid-template-columns:auto auto 1fr auto; }
+#wrapper { grid-template-rows:auto 1fr auto auto auto; grid-template-columns:auto auto 1fr auto; }
 
-#roomform, #msgform { padding:1px; }
+#roomform, #msgform { font-family:serif; }
 #sidebar { grid-row:1 / -1; overflow-x:hidden; resize:horizontal; width:150px; }
 #code, #style textarea { white-space:pre; scroll-padding:3px; }
 #style textarea, #msg { field-sizing:content; }
 #roomlist > a { display:flex; padding:4px; text-decoration:none; margin:2px; }
-#roomlist > a:hover { outline:2px solid currentColor; outline-offset:-2px; }
+#roomlist > a:hover { outline:2px solid currentColor; outline-offset:-1px; }
 #roomlist > a:not(#here) > .name { text-decoration:underline; }
 #sidebar > details > div { margin:3px; }
 .count { width:20px; }
 label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 .volume { height:10px; z-index:10000; }
-#colors { display:grid; grid-template-rows:repeat(2, auto); grid-auto-flow:column; }
+#colors { grid-template-rows:repeat(3, auto); grid-auto-flow:column; }
 #colors > input { width:100%; }
+#colors > output { text-align:center; }
 
-#middle { overflow-y:scroll; }
-#top, #bottom, #msgform { grid-column:2 / -1; text-align:center; }
+#top, #bottom, #buttons, #msgform { grid-column:2 / -1; text-align:center; }
 .msg { white-space:pre-wrap; }
 #join { width:100%; height:100%; }
-#msg { min-height:30px; max-height:200px; }
+#msg { min-height:30px; max-height:200px; margin-left:2px; }
 .hidden { display:none; }
+
+#buttons { padding:3px 3px 0 3px; overflow-x:auto; }
+#buttons > input { height:100%; width:40px; flex-shrink:0; padding-right:0; padding-left:0; }
+#big, #super { padding-top:0; }
+#big, #sub { padding-bottom:0; }
+.bold { font-weight:bold; }
+.italic { font-style:italic; }
+.big { font-size:125%; }
+.small, .super, .sub { font-size:80%; }
+.super { vertical-align:super; }
+.sub { vertical-align:sub; }
 
 @media (max-height:20rem) {
 	#roomsettings:not(.hidden) ~ details { display:none; }
@@ -56,7 +69,7 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 </head>
 <body>
 <output id="status"></output>
-<div id="wrapper">
+<div id="wrapper" class="grid">
 	<div id="sidebar" class="flex down scrollable">
 		<form id="roomform" class="flex">
 			<input id="room">
@@ -69,13 +82,16 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 		<details id="roomsettings" class="hidden">
 			<summary>room settings</summary>
 			<form id="colorform" class="flex down">
-				<div id="colors">
-					<input type="color" value="#CCCCCC">
-					<input type="color" value="#000000">
-					<input type="color" value="#FFFFFF">
-					<input type="color" value="#000000">
-					<input type="color" value="#EEEEEE">
-					<input type="color" value="#000000">
+				<div id="colors" class="grid">
+					<output>a</output>
+					<input type="color" value="#CCCCCC" class="background">
+					<input type="color" value="#000000" class="text">
+					<output>a</output>
+					<input type="color" value="#FFFFFF" class="background">
+					<input type="color" value="#000000" class="text">
+					<output>a</output>
+					<input type="color" value="#EEEEEE" class="background">
+					<input type="color" value="#000000" class="text">
 				</div>
 				<input type="submit" value="set colors">
 			</form>
@@ -117,6 +133,15 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 	</div>
 	<div id="right" class="edge scrollable"></div>
 	<div id="bottom" class="edge flex"></div>
+	<div id="buttons" class="flex">
+		<input type="color" id="color">
+		<input type="button" value="bold" id="bold" class="bold">
+		<input type="button" value="big" id="big" class="big">
+		<input type="button" value="italic" id="italic" class="italic">
+		<input type="button" value="sub" id="sub" class="small">
+		<input type="button" value="small" id="small" class="small">
+		<input type="button" value="super" id="super" class="small">
+	</div>
 	<form id="msgform" class="flex">
 		<textarea id="msg"></textarea>
 		<input type="submit" value="send" id="send" disabled>
@@ -127,7 +152,7 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 const get = id => document.getElementById(id);
 let width = 150;
 ontouchstart = e => {
-	if(e.pageX > width) return;
+	if(e.touches[0].pageX > width) return;
 	let x = e.touches[0].pageX;
 	ontouchmove = e => {
 		if(Math.abs(e.touches[0].pageX - x) < 10) {
@@ -184,17 +209,69 @@ for(const [id, url] of [['room', 'https://cdn.pixabay.com/audio/2022/03/10/audio
 		audio.src = link.value;
 	}
 	update();
-	get(id).oninput = e => {
-		localStorage.setItem(id, [checkbox.checked? ' ': '', url.value, volume.value].join('|'));
+	get(id+'audio').oninput = e => {
+		localStorage.setItem(id, [checkbox.checked? ' ': '', link.value, volume.value].join('|'));
 		update();
 	}
 	button.onclick = () => audios[id].play();
 }
 const here = decodeURI(window.location.search.slice(1)) || 'lobby';
-document.title = here+' | ankabuta';
+document.title = here+' | ankabuta pwa';
 let action = 'host';
 let password = false;
 const socket = io();
+let say = msg => socket.emit('say', msg);
+const msgs = [''];
+let index = 0;
+get('msg').oninput = e => {
+	msgs[index] = get('msg').value;
+	msgs.length = index+1;
+}
+get('buttons').onclick = get('color').oninput = e => {
+	const start = get('msg').selectionStart;
+	const end = get('msg').selectionEnd;
+	let text = get('msg').value.slice(start, end);
+	if(e.target.id == 'color') {
+		text = '['+e.target.value+'#'+text.replace(/^\[#\w+#(.*)#\]$/i, '$1')+'#]';
+	} else if(e.target.id == 'bold') {
+		text = '[*'+text+'*]';
+	} else if(e.target.id == 'big') {
+		text = '[<'+text+'>]';
+	} else if(e.target.id == 'italic') {
+		text = '[/'+text+'/]';
+	} else if(e.target.id == 'sub') {
+		text = '[~'+text+'~]';
+	} else if(e.target.id == 'small') {
+		text = '[>'+text+'<]';
+	} else if(e.target.id == 'super') {
+		text = '[^'+text+'^]';
+	}
+	get('msg').focus();
+	get('msg').setRangeText(text, start, end, 'select');
+}
+get('msg').onselect = e => {
+	const [match, color] = get('msg').value.match(/^\[#(\w+)#.*#\]$/i) ?? [null, null];
+	if(!match) return;
+	if(CSS.supports('color', '#'+color)) {
+		get('color').value = '#'+color;
+	} else if(CSS.supports('color', color)) {
+		get('color').value = color;
+	}
+}
+get('msg').onkeydown = e => {
+	if(e.key == 'Enter' && !e.shiftKey) {
+		get('send').click();
+		e.preventDefault();
+	}
+	if(e.ctrlKey) {
+		if(e.key == 'ArrowUp' && index > 0) {
+			get('msg').value = msgs[--index];
+		} else if(e.key == 'ArrowDown' && index < msgs.length-1) {
+			get('msg').value = msgs[++index];
+		} else return;
+		e.preventDefault();
+	}
+}
 socket.on('connect', () => {
 	get('status').value = '';
 	if(action) {
@@ -226,6 +303,16 @@ get('join').onclick = () => {
 	action = '';
 	get('join').remove();
 	get('send').disabled = false;
+	get('msgform').onsubmit = e => {
+		const msg = get('msg').value;
+		if(!msg) return;
+		say(msg);
+		msgs[index] = msg;
+		msgs[++index] = '';
+		msgs.length = index+1;
+		get('msg').value = '';
+		get('msg').focus();
+	}
 	socket.on('addmsgs', (msgs, side) => {
 		for(const [msg, id] of msgs) {
 			if(id != undefined && get(side+id)) {
@@ -233,7 +320,24 @@ get('join').onclick = () => {
 			} else {
 				const div = document.createElement('div');
 				div.classList.add('msg');
-				div.textContent = msg;
+				let html = msg.replace('<', '&lt;').replace('>', '&gt;');
+				for(const [a, b] of [
+					['<', '&lt;'], ['>', '&gt;'],
+					[/\[#(\w*)#(.*?)#\]/g, '<span style="color:$1">$2</span>'],
+					[/\[\*(.*?)\*\]/g, '<span class="bold">$1</span>'],
+					[/\[\/(.*?)\/\]/g, '<span class="italic">$1</span>'],
+					[/\[\^(.*?)\^\]/g, '<span class="super">$1</span>'],
+					[/\[~(.*?)~\]/g, '<span class="sub">$1</span>'],
+					[/\[&lt;(.*?)&gt;\]/g, '<span class="big">$1</span>'],
+					[/\[&gt;(.*?)&lt;\]/g, '<span class="small">$1</span>'],
+				]) {
+					for(let i = 0; i < 100; i++) {
+						const original = html;
+						html = html.replace(a, b);
+						if(html == original) break;
+					}
+				}
+				div.innerHTML = html; // what's the support for setHTML()?
 				get(side).append(div);
 				div.scrollIntoView();
 				if(id != undefined) {
@@ -263,19 +367,12 @@ get('join').onclick = () => {
 		get('send').disabled = true;
 	});
 }
-get('msg').onkeydown = e => {
-	if(e.key == 'Enter' && !e.shiftKey) {
-		e.preventDefault();
-		get('send').click();
-	}
-}
 socket.once('host', hash => {
-	if(checkbox.checked) {
-		checkbox.click();
-	}
+	stylesheet?.remove();
 	socket.removeAllListeners('join');
 	const users = new Map([[0, hash]]);
 	get('roomform').classList.add('hidden');
+	get('style').classList.add('hidden');
 	get('codeform').classList.remove('hidden');
 	get('roomsettings').classList.remove('hidden');
 	get('roomlist').open = get('personalsettings').open = false;
@@ -316,7 +413,7 @@ socket.once('host', hash => {
 					user.send('invalid command');
 				}
 			} else {
-				users.send(user.name+': '+msg);
+				users.send('[*'+user.name+'*]: '+msg);
 			}
 		}`.slice(1).replace(/^\t{2}/gm, '');
 	get('code').focus();
@@ -409,15 +506,13 @@ socket.once('host', hash => {
 		run(get('code').value);
 		get('code').focus();
 	}
-	get('msgform').onsubmit = e => {
-		if(!get('msg').value) return;
-		console.log('0: '+msg.value);
-		worker.postMessage(['hear', 0, get('msg').value]);
-		get('msg').value = '';
-		get('msg').focus();
+	say = msg => {
+		console.log('0: '+msg);
+		worker.postMessage(['hear', 0, msg]);
 	}
+	const inputs = [...document.querySelectorAll('#colors > input[type="color"]')];
 	get('colorform').onsubmit = e => {
-		socket.emit('setcolors', [...get('colors').children].map(input => input.value));
+		socket.emit('setcolors', inputs.map(input => input.value));
 	}
 	get('passwordform').onsubmit = e => {
 		socket.emit('setpassword', get('password').value);
@@ -439,21 +534,39 @@ socket.once('host', hash => {
 	socket.on('online', id => worker.postMessage(['online', id]));
 	socket.on('offline', id => worker.postMessage(['offline', id]));
 	socket.on('error', error => console.warn(error));
+	const update = get('colors').oninput = e => {
+		const input = e.target;
+		if(input.classList.contains('background')) {
+			input.previousElementSibling.style.backgroundColor = input.value;
+		} else {
+			input.previousElementSibling.previousElementSibling.style.color = input.value;
+		}
+	}
+	inputs.forEach(input => update({ target:input }));
 	get('colors').oncontextmenu = e => {
-		if(e.target.type != 'color') return;
+		if(e.target.tagName == 'OUTPUT') {
+			const letters = 'abcdefghijklmnopqrstuvwxyzƿðþæ';//'pbtdʈɖckɡqmɱnɲŋrɽʀβfvθðszʃʒʂçʝxɣχħhɦɬʋjlɓɗɠwɥiyɨʉɯuɪʊeøɵoəɛœɜʌɔæɐaɑɒ';
+			e.target.value = letters[Math.random()*letters.length|0];
+		} else if(e.target.type == 'color') {
+			e.target.value = '#'+Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+		} else return;
 		e.preventDefault();
-		e.target.value = '#'+Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+		update(e);
+	}
+	get('colors').onmousedown = a => {
+		if(a.target.type != 'color') return;
+		onmouseup = b => {
+			onmouseup = null;
+			if(a.target.type != 'color') return;
+			[a.target.value, b.target.value] = [b.target.value, a.target.value];
+			update(a);
+			update(b);
+		}
 	}
 });
 socket.once('join', () => {
 	socket.removeAllListeners('host');
 	get('msg').focus();
-	get('msgform').onsubmit = e => {
-		if(!get('msg').value) return;
-		socket.emit('say', get('msg').value);
-		get('msg').value = '';
-		get('msg').focus();
-	}
 });
 socket.once('hi', async (rooms, key) => {
 	rooms = new Map(rooms);
