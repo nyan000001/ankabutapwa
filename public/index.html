@@ -13,17 +13,20 @@ body { background:var(--color2); color:var(--color3); }
 #sidebar { background:var(--color0); color:var(--color1); }
 #sidebar > details { border:2px solid var(--color1); margin:1px 2px 1px 2px; }
 #sidebar > details > summary { background:var(--color1); color:var(--color0); }
-.edge, #status, #buttons, #msgform { background:var(--color4); color:var(--color5); }
-#status { border:2px solid var(--color5); pointer-events:none; position:fixed; bottom:2px; left:2px; }
-#status:empty { display:none; }
+.edge, #status, #buttons, #msgform, #autocomplete { background:var(--color4); color:var(--color5); }
+#status, #autocomplete { border:2px solid var(--color5); position:fixed; }
+#status { pointer-events:none; bottom:2px; left:2px; }
+#autocomplete { position:fixed; bottom:0; position-anchor:--anchor; position-area:top; width:anchor-size(--anchor width); }
+#status:empty, #autocomplete:empty { display:none; }
 
 * { box-sizing:border-box; margin:0; padding:0; tab-size:2; word-break:break-word; font-size:16px; }
-html, body, body > div { height:100%; }
+html, body, #wrapper { height:100%; }
 .scrollable { overflow-y:auto; }
 .grid { display:grid; }
 .flex { display:flex; }
 .down { flex-direction:column; }
 .stretch { flex:1; min-width:0; min-height:0; }
+.hidden { display:none; }
 details { user-select:none; }
 summary { cursor:default; white-space:pre; font-weight:bold; }
 #codeform, #code, #room, #password, #msg { flex:1; min-width:0; min-height:0; }
@@ -31,7 +34,6 @@ textarea { resize:none; }
 #status, textarea, input:not([type="color"]), summary, .edge:not(:empty), #middle { padding:6px; }
 #wrapper { grid-template-rows:auto 1fr auto auto auto; grid-template-columns:auto auto 1fr auto; }
 
-#roomform, #msgform { font-family:serif; }
 #sidebar { grid-row:1 / -1; overflow-x:hidden; resize:horizontal; width:150px; }
 #code, #style textarea { white-space:pre; scroll-padding:3px; }
 #style textarea, #msg { field-sizing:content; }
@@ -49,11 +51,10 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 #top, #bottom, #buttons, #msgform { grid-column:2 / -1; text-align:center; }
 .msg { white-space:pre-wrap; }
 #join { width:100%; height:100%; }
-#msg { min-height:30px; max-height:200px; margin-left:2px; }
-.hidden { display:none; }
-
-#buttons { padding:3px 3px 0 3px; overflow-x:auto; }
+#msg { min-height:30px; max-height:200px; anchor-name:--anchor; font-family:inherit; }
+#buttons { overflow-x:auto; }
 #buttons > input { height:100%; width:40px; flex-shrink:0; padding-right:0; padding-left:0; }
+
 #big, #super { padding-top:0; }
 #big, #sub { padding-bottom:0; }
 .bold { font-weight:bold; }
@@ -62,6 +63,7 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 .small, .super, .sub { font-size:80%; }
 .super { vertical-align:super; }
 .sub { vertical-align:sub; }
+.code { font-family:monospace; }
 
 @media (max-height:20rem) {
 	#roomsettings:not(.hidden) ~ details { display:none; }
@@ -75,7 +77,7 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 <div id="wrapper" class="grid">
 	<div id="sidebar" class="flex down scrollable">
 		<form id="roomform" class="flex">
-			<input id="room">
+			<input id="room" spellcheck="false">
 			<input type="submit" value="go">
 		</form>
 		<form id="codeform" class="hidden flex down">
@@ -97,6 +99,10 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 					<input type="color" value="#000000" class="text">
 				</div>
 				<input type="submit" value="set colors">
+			</form>
+			<form id="commandform" class="flex down">
+				<textarea id="commands" spellcheck="false">/nick name</textarea>
+				<input type="submit" value="set autocomplete">
 			</form>
 			<form id="passwordform" class="flex down">
 				<input id="password" spellcheck="false">
@@ -136,6 +142,10 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 	</main>
 	<div id="right" class="edge scrollable"></div>
 	<div id="bottom" class="edge flex"></div>
+	<form id="msgform" class="flex">
+		<textarea id="msg"></textarea>
+		<input type="submit" value="send" id="send" disabled>
+	</form>
 	<div id="buttons" class="flex">
 		<input type="color" id="color">
 		<input type="button" value="bold" id="bold" class="bold">
@@ -145,14 +155,21 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 		<input type="button" value="small" id="small" class="small">
 		<input type="button" value="super" id="super" class="small">
 	</div>
-	<form id="msgform" class="flex">
-		<textarea id="msg"></textarea>
-		<input type="submit" value="send" id="send" disabled>
-	</form>
 </div>
+<div id="autocomplete" class="code"></div>
 <script src="/socket.io/socket.io.js"></script>
 <script>
+const here = decodeURI(window.location.search.slice(1)) || 'lobby';
+document.title = here+' | ankabuta pwa';
 const get = id => document.getElementById(id);
+onsubmit = e => e.preventDefault();
+let action = 'host';
+let password = false;
+
+get('roomform').onsubmit = e => {
+	location.search = get('room').value;
+}
+
 let width = 150;
 ontouchstart = e => {
 	if(e.touches[0].pageX > width) return;
@@ -177,10 +194,39 @@ ontouchstart = e => {
 		}
 	}
 }
-onsubmit = e => e.preventDefault();
-get('roomform').onsubmit = e => {
-	location.search = get('room').value;
+
+get('buttons').onclick = get('color').oninput = e => {
+	const start = get('msg').selectionStart;
+	const end = get('msg').selectionEnd;
+	let text = get('msg').value.slice(start, end);
+	if(e.target.id == 'color') {
+		text = '['+e.target.value+'#'+text.replace(/^\[#\w+#(.*)#\]$/i, '$1')+'#]';
+	} else if(e.target.id == 'bold') {
+		text = '[*'+text+'*]';
+	} else if(e.target.id == 'big') {
+		text = '[<'+text+'>]';
+	} else if(e.target.id == 'italic') {
+		text = '[/'+text+'/]';
+	} else if(e.target.id == 'sub') {
+		text = '[~'+text+'~]';
+	} else if(e.target.id == 'small') {
+		text = '[>'+text+'<]';
+	} else if(e.target.id == 'super') {
+		text = '[^'+text+'^]';
+	}
+	get('msg').focus();
+	get('msg').setRangeText(text, start, end, 'select');
 }
+get('msg').onselect = e => {
+	const [match, color] = get('msg').value.match(/^\[#(\w+)#.*#\]$/i) ?? [null, null];
+	if(!match) return;
+	if(CSS.supports('color', '#'+color)) {
+		get('color').value = '#'+color;
+	} else if(CSS.supports('color', color)) {
+		get('color').value = color;
+	}
+}
+
 const checkbox = document.querySelector('#style input');
 const textarea = document.querySelector('#style textarea');
 const style = localStorage.getItem('style') ?? '* {\n	--color0: black;\n	--color1: white;\n	--color2: black;\n	--color3: white;\n	--color4: black;\n	--color5: white;\n}';
@@ -218,63 +264,7 @@ for(const [id, url] of [['room', 'https://cdn.pixabay.com/audio/2022/03/10/audio
 	}
 	button.onclick = () => audios[id].play();
 }
-const here = decodeURI(window.location.search.slice(1)) || 'lobby';
-document.title = here+' | ankabuta pwa';
-let action = 'host';
-let password = false;
 const socket = io();
-let say = msg => socket.emit('say', msg);
-const msgs = [''];
-let index = 0;
-get('msg').oninput = e => {
-	msgs[index] = get('msg').value;
-	msgs.length = index+1;
-}
-get('buttons').onclick = get('color').oninput = e => {
-	const start = get('msg').selectionStart;
-	const end = get('msg').selectionEnd;
-	let text = get('msg').value.slice(start, end);
-	if(e.target.id == 'color') {
-		text = '['+e.target.value+'#'+text.replace(/^\[#\w+#(.*)#\]$/i, '$1')+'#]';
-	} else if(e.target.id == 'bold') {
-		text = '[*'+text+'*]';
-	} else if(e.target.id == 'big') {
-		text = '[<'+text+'>]';
-	} else if(e.target.id == 'italic') {
-		text = '[/'+text+'/]';
-	} else if(e.target.id == 'sub') {
-		text = '[~'+text+'~]';
-	} else if(e.target.id == 'small') {
-		text = '[>'+text+'<]';
-	} else if(e.target.id == 'super') {
-		text = '[^'+text+'^]';
-	}
-	get('msg').focus();
-	get('msg').setRangeText(text, start, end, 'select');
-}
-get('msg').onselect = e => {
-	const [match, color] = get('msg').value.match(/^\[#(\w+)#.*#\]$/i) ?? [null, null];
-	if(!match) return;
-	if(CSS.supports('color', '#'+color)) {
-		get('color').value = '#'+color;
-	} else if(CSS.supports('color', color)) {
-		get('color').value = color;
-	}
-}
-get('msg').onkeydown = e => {
-	if(e.key == 'Enter' && !e.shiftKey) {
-		get('send').click();
-		e.preventDefault();
-	}
-	if(e.ctrlKey) {
-		if(e.key == 'ArrowUp' && index > 0) {
-			get('msg').value = msgs[--index];
-		} else if(e.key == 'ArrowDown' && index < msgs.length-1) {
-			get('msg').value = msgs[++index];
-		} else return;
-		e.preventDefault();
-	}
-}
 socket.on('connect', () => {
 	get('status').value = '';
 	if(action) {
@@ -306,6 +296,8 @@ get('join').onclick = () => {
 	action = '';
 	get('join').remove();
 	get('send').disabled = false;
+
+	let say = msg => socket.emit('say', msg);
 	get('msgform').onsubmit = e => {
 		const msg = get('msg').value;
 		if(!msg) return;
@@ -316,6 +308,69 @@ get('join').onclick = () => {
 		get('msg').value = '';
 		get('msg').focus();
 	}
+
+	const msgs = [''];
+	let index = 0;
+	get('msg').onkeydown = e => {
+		if(e.key == 'Enter' && !e.shiftKey) {
+			get('send').click();
+			e.preventDefault();
+		}
+		if(e.ctrlKey) {
+			if(e.key == 'ArrowUp' && index > 0) {
+				get('msg').value = msgs[--index];
+			} else if(e.key == 'ArrowDown' && index < msgs.length-1) {
+				get('msg').value = msgs[++index];
+			} else return;
+			e.preventDefault();
+		}
+	}
+
+	let commands = [];
+	get('msg').oninput = e => {
+		msgs[index] = get('msg').value;
+		msgs.length = index+1;
+		if(get('msg').value[0] == '/') {
+			get('msg').classList.add('code');
+		} else {
+			get('msg').classList.remove('code');
+		}
+	}
+	const showcommands = () => {
+		get('autocomplete').textContent = '';
+		const msg = get('msg').value;
+		if(msg[0] != '/') return;
+		const msgwords = msg.slice(0, get('msg').selectionStart).split(' ');
+		const index = msgwords.length-1;
+		for(let i = 0; i < commands.length; i++) {
+			const cmd = commands[i];
+			const cmdwords = cmd.split(' ');
+			if(!index && cmd.startsWith(msgwords[0])) {
+				const b = document.createElement('b');
+				b.textContent = msg;
+				const div = document.createElement('div');
+				div.append(b, cmd.slice(msg.length));
+				get('autocomplete').append(div);
+			} else if(cmdwords[0] == msgwords[0]) {
+				const b = document.createElement('b');
+				b.textContent = cmdwords[index];
+				const div = document.createElement('div');
+				div.append(
+					cmdwords.slice(0, index).join(' ')+' ',
+					b,
+					' '+cmdwords.slice(index+1).join(' ')
+				);
+				get('autocomplete').append(div);
+			}
+		}
+	}
+	get('msg').onselectionchange = showcommands;
+	const setcommands = cmds => {
+		commands = cmds;
+		showcommands();
+	}
+	socket.on('setcommands', setcommands);
+
 	socket.on('addmsgs', (msgs, side) => {
 		for(const [msg, id] of msgs) {
 			if(id != undefined && get(side+id)) {
@@ -324,20 +379,25 @@ get('join').onclick = () => {
 				const div = document.createElement('div');
 				div.classList.add('msg');
 				let html = msg.replace('<', '&lt;').replace('>', '&gt;');
-				for(const [a, b] of [
+				for(const [match, replacement, recursive] of [
 					['<', '&lt;'], ['>', '&gt;'],
 					[/\[#(\w*)#(.*?)#\]/g, '<span style="color:$1">$2</span>'],
 					[/\[\*(.*?)\*\]/g, '<span class="bold">$1</span>'],
 					[/\[\/(.*?)\/\]/g, '<span class="italic">$1</span>'],
 					[/\[\^(.*?)\^\]/g, '<span class="super">$1</span>'],
 					[/\[~(.*?)~\]/g, '<span class="sub">$1</span>'],
-					[/\[&lt;(.*?)&gt;\]/g, '<span class="big">$1</span>'],
-					[/\[&gt;(.*?)&lt;\]/g, '<span class="small">$1</span>'],
+					[/\[&lt;(.*?)&gt;\]/g, '<span class="big">$1</span>', true],
+					[/\[&gt;(.*?)&lt;\]/g, '<span class="small">$1</span>', true],
+					[/\[\{(.*?)\}\]/g, '<span class="code">$1</span>'],
 				]) {
-					for(let i = 0; i < 100; i++) {
-						const original = html;
-						html = html.replace(a, b);
-						if(html == original) break;
+					if(recursive) {
+						for(let i = 0; i < 100; i++) {
+							const original = html;
+							html = html.replace(match, replacement);
+							if(html == original) break;
+						}
+					} else {
+						html = html.replace(match, replacement);
 					}
 				}
 				div.innerHTML = html; // what's the support for setHTML()?
@@ -369,208 +429,212 @@ get('join').onclick = () => {
 		get('status').value = reason;
 		get('send').disabled = true;
 	});
-}
-socket.once('host', hash => {
-	stylesheet?.remove();
-	socket.removeAllListeners('join');
-	const users = new Map([[0, hash]]);
-	get('roomform').classList.add('hidden');
-	get('style').classList.add('hidden');
-	get('codeform').classList.remove('hidden');
-	get('roomsettings').classList.remove('hidden');
-	get('roomlist').open = get('personalsettings').open = false;
-	if(innerHeight > 600) {
-		get('roomsettings').open = true;
-	}
-	onkeydown = e => {
-		if(e.key == 's' && e.ctrltKey) {
-			e.preventDefault();
-			get('run').click();
+	socket.once('host', hash => {
+		stylesheet?.remove();
+		socket.removeAllListeners('join');
+		const users = new Map([[0, hash]]);
+		get('roomform').classList.add('hidden');
+		get('style').classList.add('hidden');
+		get('codeform').classList.remove('hidden');
+		get('roomsettings').classList.remove('hidden');
+		get('roomlist').open = get('personalsettings').open = false;
+		if(innerHeight > 600) {
+			get('roomsettings').open = true;
 		}
-	}
-	get('code').value = `
-		const defaultnames = ['Maka', 'Lea', 'Kawena', 'Kekoa', 'Waiola', 'Hanalei', 'Kamalani', 'Malina', 'Kanakanui', 'Lilinoe', 'Momi', 'Waipuna', 'Makoa', 'Kalei', 'Loke', 'Ululani', 'Kona', 'Kamaile', 'Maluhia', 'Leinani', 'Kaleinani', 'Mana', 'Kapuni', 'Kealoha', 'Kiele', 'Kulamanu', 'Mokihana', 'Kapono', 'Maunakea', 'Pauahi', 'Kaliko', 'Lei', 'Keola', 'Hualani', 'Kamalu', 'Makana', 'Haunani', 'Kaulana', 'Keahi', 'Kalua', 'Luana', 'Kainalu', 'Makanui', 'Kaimana', 'Punahele', 'Kanoa', 'Alana', 'Maile', 'Melia', 'Mililani', 'Keawe', 'Makai', 'Kailani', 'Momilani', 'Hina', 'Hanohano', 'Kalama', 'Nohea', 'Kainoa', 'Lani', 'Kapulani', 'Uluwehi', 'Kaipo', 'Onaona', 'Koa', 'Kanani', 'Lokelani', 'Pumehana', 'Lehua', 'Kekona', 'Kaluhi', 'Nahenahe', 'Lana', 'Kaihe', 'Puamana', 'Noelani', 'Kawai', 'Leihua', 'Kapua', 'Nani', 'Kaila', 'Puna', 'Kanamu', 'Mamo', 'Keona', 'Wailani', 'Ikaika', 'Aloha', 'Akoni', 'Kawelo', 'Kiani', 'Kamaka', 'Nanea', 'Mahina', 'Kahiau', 'Hekili', 'Hiapo', 'Lono', 'Kaina', 'Pua', 'Kini', 'Kaleo', 'Makamae', 'Kalena', 'Ipo', 'Leilani', 'Kahula', 'Pali', 'Leimamo', 'Keao', 'Manuia', 'Lanakila', 'Palikapu', 'Hiwahiwa', 'Kilohana', 'Keilani', 'Anuhea', 'Kalani'];
-		function join(user, msg) {
-			user.name = user.defaultname = defaultnames.shift();
-			users.sendright(users.map(user => [user.id+' '+user.name, user.id]));
-			users.send(user.name+' has joined');
+		onkeydown = e => {
+			if(e.key == 's' && e.ctrltKey) {
+				e.preventDefault();
+				get('run').click();
+			}
 		}
-		function leave(user, msg) {
-			defaultnames.push(user.defaultname);
-			users.unsendright(user.id);
-			users.send(user.name+' has left');
-		}
-		function online(user) {
-			users.sendright(user.id+' '+user.name, user.id);
-		}
-		function offline(user) {
-			users.sendright(user.id+' ('+user.name+')', user.id);
-		}
-		function hear(user, cmd, msg) {
-			if(cmd) {
-				if(['nick', 'name', 'n'].includes(cmd)) {
-					users.send(user.name+' is now known as '+msg);
-					user.name = msg;
-					users.sendright(user.id+' '+user.name, user.id);
-				} else {
-					user.send('invalid command');
-				}
-			} else {
-				users.send('[*'+user.name+'*]: '+msg);
+		get('code').value = `
+			const defaultnames = ['Maka', 'Lea', 'Kawena', 'Kekoa', 'Waiola', 'Hanalei', 'Kamalani', 'Malina', 'Kanakanui', 'Lilinoe', 'Momi', 'Waipuna', 'Makoa', 'Kalei', 'Loke', 'Ululani', 'Kona', 'Kamaile', 'Maluhia', 'Leinani', 'Kaleinani', 'Mana', 'Kapuni', 'Kealoha', 'Kiele', 'Kulamanu', 'Mokihana', 'Kapono', 'Maunakea', 'Pauahi', 'Kaliko', 'Lei', 'Keola', 'Hualani', 'Kamalu', 'Makana', 'Haunani', 'Kaulana', 'Keahi', 'Kalua', 'Luana', 'Kainalu', 'Makanui', 'Kaimana', 'Punahele', 'Kanoa', 'Alana', 'Maile', 'Melia', 'Mililani', 'Keawe', 'Makai', 'Kailani', 'Momilani', 'Hina', 'Hanohano', 'Kalama', 'Nohea', 'Kainoa', 'Lani', 'Kapulani', 'Uluwehi', 'Kaipo', 'Onaona', 'Koa', 'Kanani', 'Lokelani', 'Pumehana', 'Lehua', 'Kekona', 'Kaluhi', 'Nahenahe', 'Lana', 'Kaihe', 'Puamana', 'Noelani', 'Kawai', 'Leihua', 'Kapua', 'Nani', 'Kaila', 'Puna', 'Kanamu', 'Mamo', 'Keona', 'Wailani', 'Ikaika', 'Aloha', 'Akoni', 'Kawelo', 'Kiani', 'Kamaka', 'Nanea', 'Mahina', 'Kahiau', 'Hekili', 'Hiapo', 'Lono', 'Kaina', 'Pua', 'Kini', 'Kaleo', 'Makamae', 'Kalena', 'Ipo', 'Leilani', 'Kahula', 'Pali', 'Leimamo', 'Keao', 'Manuia', 'Lanakila', 'Palikapu', 'Hiwahiwa', 'Kilohana', 'Keilani', 'Anuhea', 'Kalani'];
+			function join(user, msg) {
+				user.name = user.defaultname = defaultnames.shift();
+				users.sendright(users.map(user => [user.id+' '+user.name, user.id]));
+				users.send(user.name+' has joined');
 			}
-		}`.slice(1).replace(/^\t{2}/gm, '');
-	get('code').focus();
-	const codes = [];
-	let worker;
-	const run = code => {
-		codes.push(code);
-		const blob = new Blob([`
-			class User {
-				constructor(id, hash) {
-					this.id = id;
-					this.hash = hash;
-				}
-				post(action, ...args) {
-					postMessage([action, [this.id], ...args]);
-				}
+			function leave(user, reason) {
+				defaultnames.push(user.defaultname);
+				users.unsendright(user.id);
+				users.send(user.name+' has left ('+reason+')');
 			}
-			class Users extends Array {
-				static get [Symbol.species]() {
-					return Users;
-				}
-				get(val, prop = 'id') {
-					return this.find(user => user[prop] == val);
-				}
-				has(val, prop = 'id') {
-					return this.some(user => user[prop] == val);
-				}
-				post(action, ...args) {
-					postMessage([action, this.map(user => user.id), ...args]);
-				}
+			function online(user) {
+				users.sendright(user.id+' '+user.name, user.id);
 			}
-			for(const side of ['top', 'right', 'bottom', 'left', 'middle', '']) {
-				User.prototype['send'+side] = Users.prototype['send'+side] = function (msg, msgid) {
-					this.post('send', [].concat(msg).map(msg => [].concat(msg, msgid ?? []).slice(0, 2)), side || 'middle');
-				}
-				User.prototype['unsend'+side] = Users.prototype['unsend'+side] = function (msgids) {
-					this.post('unsend', [].concat(msgids), side || 'middle');
-				}
-				User.prototype['clear'+side] = Users.prototype['clear'+side] = function () {
-					this.post('clear', side? [side]: ['top', 'right', 'bottom', 'left', 'middle']);
-				}
+			function offline(user) {
+				users.sendright(user.id+' ('+user.name+')', user.id);
 			}
-			User.prototype.kick = Users.prototype.kick = function () {
-				this.post('kick');
-			}
-			const users = new Users();
-			${ code }
-			onmessage = e => {
-				const [action, id, data] = e.data;
-				let user = users.get(id);
-				if(action == 'join') {
-					user = new User(id, data);
-					users.push(user);
-					this.join?.(user, data);
-				} else if(!user) {
-					throw Error(action+' failed: '+id+' not found');
-				} else if(action == 'leave') {
-					users.splice(users.findIndex(user => user.id == id), 1);
-					this.leave?.(user);
-				} else if(action == 'hear') {
-					let cmd = '';
-					let msg = data;
-					if(data[0] == '/') {
-						[cmd, msg = ''] = data.slice(1).split(/ (.*)/);
+			function hear(user, cmd, msg) {
+				if(cmd) {
+					if(['nick', 'name', 'n'].includes(cmd)) {
+						users.send(user.name+' is now known as '+msg);
+						user.name = msg;
+						users.sendright(user.id+' '+user.name, user.id);
+					} else {
+						user.send('invalid command');
 					}
-					this.hear?.(user, cmd, msg);
 				} else {
-					this[action]?.(user);
+					users.send('[*'+user.name+'*]: '+msg);
 				}
-			}`.slice(1).replace(/^\t{3}/gm, '')
-		]);
-		const blobURL = (URL ?? webkitURL).createObjectURL(blob, { type: 'application/javascript; charset=utf-8' });
-		worker = new Worker(blobURL);
-		worker.onmessage = e => {
-			socket.emit(...e.data);
+			}`.slice(1).replace(/^\t{2}/gm, '');
+		get('code').focus();
+		const codes = [];
+		let worker;
+		const run = code => {
+			codes.push(code);
+			const blob = new Blob([`
+				class User {
+					constructor(id, hash) {
+						this.id = id;
+						this.hash = hash;
+					}
+					post(action, ...args) {
+						postMessage([action, [this.id], ...args]);
+					}
+				}
+				class Users extends Array {
+					static get [Symbol.species]() {
+						return Users;
+					}
+					get(val, prop = 'id') {
+						return this.find(user => user[prop] == val);
+					}
+					has(val, prop = 'id') {
+						return this.some(user => user[prop] == val);
+					}
+					post(action, ...args) {
+						postMessage([action, this.map(user => user.id), ...args]);
+					}
+				}
+				for(const side of ['top', 'right', 'bottom', 'left', 'middle', '']) {
+					User.prototype['send'+side] = Users.prototype['send'+side] = function (msg, msgid) {
+						this.post('send', [].concat(msg).map(msg => [].concat(msg, msgid ?? []).slice(0, 2)), side || 'middle');
+					}
+					User.prototype['unsend'+side] = Users.prototype['unsend'+side] = function (msgids) {
+						this.post('unsend', [].concat(msgids), side || 'middle');
+					}
+					User.prototype['clear'+side] = Users.prototype['clear'+side] = function () {
+						this.post('clear', side? [side]: ['top', 'right', 'bottom', 'left', 'middle']);
+					}
+				}
+				User.prototype.kick = Users.prototype.kick = function () {
+					this.post('kick');
+				}
+				const users = new Users();
+				${ code }
+				onmessage = e => {
+					const [action, id, data] = e.data;
+					let user = users.get(id);
+					if(action == 'join') {
+						user = new User(id, data);
+						users.push(user);
+						this.join?.(user, data);
+					} else if(!user) {
+						throw Error(action+' failed: '+id+' not found');
+					} else if(action == 'leave') {
+						users.splice(users.findIndex(user => user.id == id), 1);
+						this.leave?.(user, data);
+					} else if(action == 'hear') {
+						let cmd = '';
+						let msg = data;
+						if(data[0] == '/') {
+							[cmd, msg = ''] = data.slice(1).split(/ (.*)/);
+						}
+						this.hear?.(user, cmd, msg);
+					} else {
+						this[action]?.(user);
+					}
+				}`.slice(1).replace(/^\t{3}/gm, '')
+			]);
+			const blobURL = (URL ?? webkitURL).createObjectURL(blob, { type: 'application/javascript; charset=utf-8' });
+			worker = new Worker(blobURL);
+			worker.onmessage = e => {
+				socket.emit(...e.data);
+			}
+			worker.onerror = e => {
+				get('code').style.backgroundColor = '#f00';
+				codes.pop();
+				if(codes.length) {
+					run(codes.at(-1));
+				}
+			}
+			socket.emit('clear', [...users.keys()], ['top', 'right', 'bottom', 'left', 'middle']);
+			users.forEach((hash, id) => worker.postMessage(['join', id, hash]));
 		}
-		worker.onerror = e => {
-			get('code').style.backgroundColor = '#f00';
-			codes.pop();
-			if(codes.length) {
-				run(codes.at(-1));
+		run(get('code').value);
+		get('codeform').onsubmit = e => {
+			get('code').style.backgroundColor = null;
+			run(get('code').value);
+			get('code').focus();
+		}
+		say = msg => {
+			console.log('0: '+msg);
+			worker.postMessage(['hear', 0, msg]);
+		}
+		const inputs = [...document.querySelectorAll('#colors > input[type="color"]')];
+		get('colorform').onsubmit = e => {
+			socket.emit('setcolors', inputs.map(input => input.value));
+		}
+		get('commandform').onsubmit = e => {
+			socket.emit('setcommands', get('commands').value);
+		}
+		get('passwordform').onsubmit = e => {
+			socket.emit('setpassword', get('password').value);
+		}
+		socket.on('hear', (id, msg) => {
+			console.log(id+': '+msg);
+			worker.postMessage(['hear', id, msg]);
+		});
+		socket.on('adduser', (id, hash) => {
+			console.log(id+' has joined');
+			users.set(id, hash);
+			worker.postMessage(['join', id, hash]);
+		});
+		socket.on('removeuser', id => {
+			console.log(id+' has left');
+			worker.postMessage(['leave', id]);
+			users.delete(id);
+		});
+		socket.on('online', id => worker.postMessage(['online', id]));
+		socket.on('offline', id => worker.postMessage(['offline', id]));
+		socket.on('error', error => console.warn(error));
+		const update = get('colors').oninput = e => {
+			const input = e.target;
+			if(input.classList.contains('background')) {
+				input.previousElementSibling.style.backgroundColor = input.value;
+			} else {
+				input.previousElementSibling.previousElementSibling.style.color = input.value;
 			}
 		}
-		socket.emit('clear', [...users.keys()], ['top', 'right', 'bottom', 'left', 'middle']);
-		users.forEach((hash, id) => worker.postMessage(['join', id, hash]));
-	}
-	run(get('code').value);
-	get('codeform').onsubmit = e => {
-		get('code').style.backgroundColor = null;
-		run(get('code').value);
-		get('code').focus();
-	}
-	say = msg => {
-		console.log('0: '+msg);
-		worker.postMessage(['hear', 0, msg]);
-	}
-	const inputs = [...document.querySelectorAll('#colors > input[type="color"]')];
-	get('colorform').onsubmit = e => {
-		socket.emit('setcolors', inputs.map(input => input.value));
-	}
-	get('passwordform').onsubmit = e => {
-		socket.emit('setpassword', get('password').value);
-	}
-	socket.on('hear', (id, msg) => {
-		console.log(id+': '+msg);
-		worker.postMessage(['hear', id, msg]);
-	});
-	socket.on('adduser', (id, hash) => {
-		console.log(id+' has joined');
-		users.set(id, hash);
-		worker.postMessage(['join', id, hash]);
-	});
-	socket.on('removeuser', id => {
-		console.log(id+' has left');
-		worker.postMessage(['leave', id]);
-		users.delete(id);
-	});
-	socket.on('online', id => worker.postMessage(['online', id]));
-	socket.on('offline', id => worker.postMessage(['offline', id]));
-	socket.on('error', error => console.warn(error));
-	const update = get('colors').oninput = e => {
-		const input = e.target;
-		if(input.classList.contains('background')) {
-			input.previousElementSibling.style.backgroundColor = input.value;
-		} else {
-			input.previousElementSibling.previousElementSibling.style.color = input.value;
+		inputs.forEach(input => update({ target:input }));
+		get('colors').oncontextmenu = e => {
+			if(e.target.tagName == 'OUTPUT') {
+				const letters = 'abcdefghijklmnopqrstuvwxyzƿðþæ';//'pbtdʈɖckɡqmɱnɲŋrɽʀβfvθðszʃʒʂçʝxɣχħhɦɬʋjlɓɗɠwɥiyɨʉɯuɪʊeøɵoəɛœɜʌɔæɐaɑɒ';
+				e.target.value = letters[Math.random()*letters.length|0];
+			} else if(e.target.type == 'color') {
+				e.target.value = '#'+Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+			} else return;
+			e.preventDefault();
+			update(e);
 		}
-	}
-	inputs.forEach(input => update({ target:input }));
-	get('colors').oncontextmenu = e => {
-		if(e.target.tagName == 'OUTPUT') {
-			const letters = 'abcdefghijklmnopqrstuvwxyzƿðþæ';//'pbtdʈɖckɡqmɱnɲŋrɽʀβfvθðszʃʒʂçʝxɣχħhɦɬʋjlɓɗɠwɥiyɨʉɯuɪʊeøɵoəɛœɜʌɔæɐaɑɒ';
-			e.target.value = letters[Math.random()*letters.length|0];
-		} else if(e.target.type == 'color') {
-			e.target.value = '#'+Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
-		} else return;
-		e.preventDefault();
-		update(e);
-	}
-	get('colors').onmousedown = a => {
-		if(a.target.type != 'color') return;
-		onmouseup = b => {
-			onmouseup = null;
+		get('colors').onmousedown = a => {
 			if(a.target.type != 'color') return;
-			[a.target.value, b.target.value] = [b.target.value, a.target.value];
-			update(a);
-			update(b);
+			onmouseup = b => {
+				onmouseup = null;
+				if(a.target.type != 'color') return;
+				[a.target.value, b.target.value] = [b.target.value, a.target.value];
+				update(a);
+				update(b);
+			}
 		}
-	}
-});
-socket.once('join', () => {
-	socket.removeAllListeners('host');
-	get('msg').focus();
-});
+	});
+	socket.once('join', cmds => {
+		socket.removeAllListeners('host');
+		setcommands(cmds);
+		get('msg').focus();
+	});
+}
 socket.once('hi', async (rooms, key) => {
 	rooms = new Map(rooms);
 	const setcolors = (name, colors) => {
