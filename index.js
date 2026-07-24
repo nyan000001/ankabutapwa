@@ -34,11 +34,12 @@ app.use(express.static(__dirname+'/public'));
 const server = require('http').createServer(app);
 const io = require('socket.io')(server, { connectionStateRecovery:{ maxDisconnectionDuration:60000, skipMiddlewares:true } });
 const defaultcolors = ['#ccc', '#000', '#fff', '#000', '#eee', '#000'];
+const defaultcommands = ['/nick name'];
 const rooms = new Map([
 	['lobby', {
-		users:new Map(), password:'', colors:defaultcolors, emit:function (action, userid, ...args) {
+		users:new Map(), password:'', colors:defaultcolors, commands:['/kick password id'], emit:function (action, userid, ...args) {
 			if(action == 'adduser') {
-				io.to('?lobby').emit('addmsgs', [...this.users.keys()].map(id => [id.toString(), id.toString()]), 'right');
+				io.to('?lobby').emit('addmsgs', [...this.users.keys()].map(userid2 => [userid2.toString(), userid2.toString()]), 'right');
 			} else if(action == 'removeuser') {
 				io.to('?lobby').emit('removemsgs', [[userid]], 'right');
 			} else if(action == 'online') {
@@ -46,7 +47,77 @@ const rooms = new Map([
 			} else if(action == 'offline') {
 				io.to('?lobby').emit('addmsgs', [['('+userid+')', userid]], 'right');
 			} else if(action == 'hear') {
-				io.to('?lobby').emit('addmsgs', [['[*'+userid+'*]: '+args[0]]], 'middle');
+				const get = userid2 => io.sockets.sockets.get(this.users.get(userid2));
+				const error = msg => get(userid).emit('addmsgs', [[msg]], 'middle');
+				const msg = args[0];
+				if(msg.startsWith('/')) {
+					const [cmd, password, ...args] = msg.split(' ');
+					if(cmd == '/kick') {
+						if(password == process.env.PASSWORD) {
+							for(const userid2 of args) {
+								get(userid2)?.kick?.('kicked by '+userid);
+							}
+						} else {
+							error('invalid password');
+						}
+					} else {
+						error('invalid command');
+					}
+				} else {
+					io.to('?lobby').emit('addmsgs', [['[*'+userid+'*]: '+args[0]]], 'middle');
+				}
+			}
+		}
+	}], ['questions', {
+		users:new Map(), password:'', colors:defaultcolors, commands:['/ask question', '/next', '/previous'], questions:[['what did you do today?'], ['what are you reading?'], ['share a song'], ['what do you want to learn?']], emit:function (action, userid, ...args) {
+			const get = userid2 => io.sockets.sockets.get(this.users.get(userid2));
+			const user = get(userid);
+			const ask = index => {
+				if(user.data.index != undefined) {
+					user.emit('clear', ['top', 'middle']);
+				}
+				if(index < 0) {
+					user.data.index = this.questions.length-1;
+				} else {
+					user.data.index = index % this.questions.length;
+				}
+				user.emit('addmsgs', [[this.questions[user.data.index][0]]], 'top');
+				user.data.ready = false;
+			}
+			if(action == 'adduser') {
+				ask(Math.random()*this.questions.length|0);
+			} else if(action == 'hear') {
+				let msg = args[0];
+				if(msg.startsWith('/')) {
+					const [cmd, ...args] = msg.split(' ');
+					if(cmd == '/next') {
+						ask(user.data.index+1);
+					} else if(cmd == '/previous') {
+						ask(user.data.index-1);
+					} else if(cmd == '/ask') {
+						const question = args.join(' ');
+						user.data.index = this.questions.length;
+						questions[user.data.index] = [user.data.question];
+						user.emit('addmsgs', [[question]], 'top');
+						user.data.ready = true;
+					} else {
+						user.emit('addmsgs', [['invalid command']], 'middle');
+					}
+				} else {
+					const question = this.questions[user.data.index];
+					msg = question.length+' '+msg;
+					question.push(msg);
+					for(const userid2 of this.users.keys()) {
+						const user2 = get(userid2);
+						if(user2.data.ready && user2.data.index == user.data.index) {
+							user2.emit('addmsgs', [[msg]], 'middle');
+						}
+					}
+					if(!user.data.ready) {
+						user.emit('addmsgs', question.slice(1).map(answer => [answer]), 'middle');
+					}
+					user.data.ready = true;
+				}
 			}
 		}
 	}]
@@ -54,7 +125,7 @@ const rooms = new Map([
 const hashes = new Map();
 const timeouts = new Map();
 io.on('connection', socket => {
-	if(socket.data.kicked) return;
+	if(socket.data.dead) return;
 	const roomname = decodeURI(socket.handshake.headers.referer).match(/\?(.+)/)?.[1] || 'lobby';
 	let room = rooms.get(roomname);
 	const get = userid => {
@@ -102,7 +173,7 @@ io.on('connection', socket => {
 				userid++;
 			}
 			socket.data.userid = userid;
-			socket.emit('join');
+			socket.emit('join', room.commands);
 			room.users.set(userid, socket.id);
 			io.emit('setcount', roomname, room.users.size);
 			get(0).emit('adduser', userid, socket.data.hash);
@@ -117,7 +188,7 @@ io.on('connection', socket => {
 			socket.removeAllListeners('host');
 			socket.data.userid = 0;
 			socket.emit('host', socket.data.hash);
-			room = { users:new Map([[0, socket.id]]), password:'', colors:defaultcolors };
+			room = { users:new Map([[0, socket.id]]), password:'', colors:defaultcolors, commands:defaultcommands };
 			rooms.set(roomname, room);
 			io.emit('addroom', roomname, { count:1, locked:false, colors:room.colors });
 			notify('new room', roomname, [...subscriptions.values()]);
@@ -139,40 +210,47 @@ io.on('connection', socket => {
 		socket.on('say', msg => {
 			get(0).emit('hear', userid, msg);
 		});
+		const die = reason => {
+			get(0).emit('removeuser', userid, reason);
+			room.users.delete(userid);
+			io.emit('setcount', roomname, room.users.size);
+			socket.data.dead = true;
+		};		
 		socket.once('disconnect', reason => {
-			const die = () => {
-				timeouts.delete(socket.id);
-				room.users.delete(userid);
-				io.emit('setcount', roomname, room.users.size);
-				get(0).emit('removeuser', userid);
-			};
-			reason.includes('disconnect')? die(): timeouts.set(socket.id, setTimeout(die, 60000));
+			if(reason.includes('disconnect')) {
+				die(reason);
+			} else {
+				get(0).emit('offline', userid);
+				timeouts.set(socket.id, setTimeout(() => {
+					timeouts.delete(socket.id);
+					die(reason);
+				}, 60000));
+			}
 		});
+		socket.kick = reason => {
+			socket.emit('kick', reason);
+			socket.removeAllListeners('say');
+			socket.removeAllListeners('disconnect');
+			die(reason);
+		}
 	}
 	function host() {
-		const kick = (userids, reason) => {
-			for(const userid of userids) {
-				const user = get(userid);
-				if(!user) continue;
-				user.emit('kick', reason);
-				room.users.delete(user.data.userid);
-				user.removeAllListeners();
-				user.data.kicked = true;
-				io.emit('setcount', roomname, room.users.size);
-			}
-		}
 		socket.on('kick', userids => {
-			kick(userids, 'kicked');
+			for(const userid of userids) {
+				get(userid)?.kick?.('kicked');
+			}
 		});
 		socket.once('disconnect', reason => {
 			const die = () => {
 				timeouts.delete(socket.id);
 				room.users.delete(0);
-				kick([...room.users.keys()], 'admin has disconnected');
+				for(const userid of room.users.keys()) {
+					get(userid)?.kick('admin has disconnected');
+				}
 				rooms.delete(roomname);
 				io.emit('removeroom', roomname);
 			};
-			reason.includes('disconnect')? die(): timeouts.set(socket.id, setTimeout(die, 60000));
+			reason.includes('disconnect')? die(): timeouts.set(socket.id, setTimeout(die, 30000));
 		});
 		socket.on('send', (userids, msgs, side) => {
 			for(const userid of userids) {
@@ -187,6 +265,12 @@ io.on('connection', socket => {
 		socket.on('clear', (userids, sides) => {
 			for(const userid of userids) {
 				get(userid)?.emit('clear', sides);
+			}
+		});
+		socket.on('setcommands', commands => {
+			room.commands = commands;
+			for(const userid of userids) {
+				io.emit('setcommands', commands);
 			}
 		});
 		socket.on('setcolors', colors => {
