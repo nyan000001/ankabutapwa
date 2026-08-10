@@ -32,6 +32,8 @@ summary { cursor:default; white-space:pre; font-weight:bold; }
 #codeform, #code, #room, #password, #msg { flex:1; min-width:0; min-height:0; }
 textarea { resize:none; }
 #status, textarea, input:not([type="color"]), summary, .edge:not(:empty), #middle { padding:6px; }
+#files { width:100%; height:100%; margin:auto; text-align:center; }
+#files > img { min-width:30%; min-height:30%; max-width:100%; max-height:100%; object-fit:contain; vertical-align:middle; border:2px solid #000; padding:2px; margin:2px; }
 #wrapper { grid-template-rows:auto 1fr auto auto auto; grid-template-columns:auto auto 1fr auto; }
 
 #sidebar { grid-row:1 / -1; overflow-x:hidden; resize:horizontal; width:150px; }
@@ -73,6 +75,7 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 <link rel="apple-touch-icon" href="icon192.png">
 </head>
 <body>
+<dialog id="files"></dialog>
 <output id="status"></output>
 <div id="wrapper" class="grid">
 	<div id="sidebar" class="flex down scrollable">
@@ -99,10 +102,6 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 					<input type="color" value="#000000" class="text">
 				</div>
 				<input type="submit" value="set colors">
-			</form>
-			<form id="commandform" class="flex down">
-				<textarea id="commands" spellcheck="false">/nick name</textarea>
-				<input type="submit" value="set autocomplete">
 			</form>
 			<form id="passwordform" class="flex down">
 				<input id="password" spellcheck="false">
@@ -132,6 +131,8 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 			</div>
 			<div id="notifications" class="hidden flex down">
 				<label><input type="checkbox" class="toggle"> notifications</label>
+				<input type="time" value="10:00">
+				<input type="time" value="22:00">
 			</div>
 		</details>
 	</div>
@@ -297,6 +298,8 @@ get('join').onclick = () => {
 	get('join').remove();
 	get('send').disabled = false;
 
+	socket.on('error', error => console.warn(error));
+
 	let say = msg => socket.emit('say', msg);
 	get('msgform').onsubmit = e => {
 		const msg = get('msg').value;
@@ -365,11 +368,10 @@ get('join').onclick = () => {
 		}
 	}
 	get('msg').onselectionchange = showcommands;
-	const setcommands = cmds => {
+	socket.on('setcommands', cmds => {
 		commands = cmds;
 		showcommands();
-	}
-	socket.on('setcommands', setcommands);
+	});
 
 	socket.on('addmsgs', (msgs, side) => {
 		for(const [msg, id] of msgs) {
@@ -378,29 +380,47 @@ get('join').onclick = () => {
 			} else {
 				const div = document.createElement('div');
 				div.classList.add('msg');
-				let html = msg.replace('<', '&lt;').replace('>', '&gt;');
-				for(const [match, replacement, recursive] of [
-					['<', '&lt;'], ['>', '&gt;'],
-					[/\[#(\w*)#(.*?)#\]/g, '<span style="color:$1">$2</span>'],
-					[/\[\*(.*?)\*\]/g, '<span class="bold">$1</span>'],
-					[/\[\/(.*?)\/\]/g, '<span class="italic">$1</span>'],
-					[/\[\^(.*?)\^\]/g, '<span class="super">$1</span>'],
-					[/\[~(.*?)~\]/g, '<span class="sub">$1</span>'],
-					[/\[&lt;(.*?)&gt;\]/g, '<span class="big">$1</span>', true],
-					[/\[&gt;(.*?)&lt;\]/g, '<span class="small">$1</span>', true],
-					[/\[\{(.*?)\}\]/g, '<span class="code">$1</span>'],
-				]) {
-					if(recursive) {
-						for(let i = 0; i < 100; i++) {
-							const original = html;
-							html = html.replace(match, replacement);
-							if(html == original) break;
+				const types = { '[]':'form', '<>':'big', '><':'small', '^^':'super', '~~':'sub', '**':'bold', '//':'italic', '{}':'code', '##':'color' };
+				const regex = new RegExp('\\[('+Object.keys(types).map(symbols => '\\'+symbols[0]+'.*\\'+symbols[1]).join('|')+')\\]');
+				const build = text => {
+					let elem;
+					const type = types[text[0]+text.slice(-1)];
+					let content = text.slice(1, -1);
+					if(type == 'form') {
+						elem = document.createElement('form');
+						const words = content.split(' ');
+						const inputs = [];
+						for(const value of words) {
+							const input = document.createElement('input');
+							if(value[0] == '/') {
+								input.type = 'submit';
+								input.value = value.slice(1);
+							} else {
+								input.placeholder = value;
+								inputs.push(input);
+							}
+							elem.append(input);
 						}
+						content = '';
+						elem.onsubmit = e => {
+							say('/'+e.submitter.value+' '+inputs.map(input => input.value.replaceAll(' ', '\u00A0').join(' ')));
+						}
+					} else if(type == 'code') {
+						elem = document.createElement('span');
+						elem.className = type;
+						elem.textContent = content;
+						return elem;
+					} else if(type == 'color') {
+						elem = document.createElement('span');
+						elem.style.color = text.match(/(#\w+)#/)?.[0];
 					} else {
-						html = html.replace(match, replacement);
+						elem = document.createElement('span');
+						elem.className = type;
 					}
+					elem.append(...content.split(regex).map((text, i) => i%2? build(text): text));
+					return elem;
 				}
-				div.innerHTML = html; // what's the support for setHTML()?
+				div.append(...msg.split(regex).map((text, i) => i%2? build(text): text));
 				get(side).append(div);
 				div.scrollIntoView();
 				if(id != undefined) {
@@ -422,6 +442,7 @@ get('join').onclick = () => {
 			get(side).textContent = '';
 		}
 	});
+
 	socket.once('kick', reason => {
 		onbeforeunload = null;
 		socket.removeAllListeners('connect');
@@ -429,6 +450,7 @@ get('join').onclick = () => {
 		get('status').value = reason;
 		get('send').disabled = true;
 	});
+
 	socket.once('host', hash => {
 		stylesheet?.remove();
 		socket.removeAllListeners('join');
@@ -453,6 +475,7 @@ get('join').onclick = () => {
 				user.name = user.defaultname = defaultnames.shift();
 				users.sendright(users.map(user => [user.id+' '+user.name, user.id]));
 				users.send(user.name+' has joined');
+				user.setcommands(['/nick NAME']);
 			}
 			function leave(user, reason) {
 				defaultnames.push(user.defaultname);
@@ -477,7 +500,7 @@ get('join').onclick = () => {
 				} else {
 					users.send('[*'+user.name+'*]: '+msg);
 				}
-			}`.slice(1).replace(/^\t{2}/gm, '');
+			}`.slice(1).replace(/^\t{3}/gm, '');
 		get('code').focus();
 		const codes = [];
 		let worker;
@@ -521,6 +544,12 @@ get('join').onclick = () => {
 				User.prototype.kick = Users.prototype.kick = function () {
 					this.post('kick');
 				}
+				User.prototype.setcommands = Users.prototype.setcommands = function (commands) {
+					this.post('setcommands', commands);
+				}
+				User.prototype.setcolors = Users.prototype.setcolors = function (colors) {
+					this.post('setcolors', colors);
+				}
 				const users = new Users();
 				${ code }
 				onmessage = e => {
@@ -545,7 +574,7 @@ get('join').onclick = () => {
 					} else {
 						this[action]?.(user);
 					}
-				}`.slice(1).replace(/^\t{3}/gm, '')
+				}`.slice(1).replace(/^\t{4}/gm, '')
 			]);
 			const blobURL = (URL ?? webkitURL).createObjectURL(blob, { type: 'application/javascript; charset=utf-8' });
 			worker = new Worker(blobURL);
@@ -574,10 +603,7 @@ get('join').onclick = () => {
 		}
 		const inputs = [...document.querySelectorAll('#colors > input[type="color"]')];
 		get('colorform').onsubmit = e => {
-			socket.emit('setcolors', inputs.map(input => input.value));
-		}
-		get('commandform').onsubmit = e => {
-			socket.emit('setcommands', get('commands').value);
+			socket.emit('setcolors', [...users.keys()], inputs.map(input => input.value));
 		}
 		get('passwordform').onsubmit = e => {
 			socket.emit('setpassword', get('password').value);
@@ -598,7 +624,6 @@ get('join').onclick = () => {
 		});
 		socket.on('online', id => worker.postMessage(['online', id]));
 		socket.on('offline', id => worker.postMessage(['offline', id]));
-		socket.on('error', error => console.warn(error));
 		const update = get('colors').oninput = e => {
 			const input = e.target;
 			if(input.classList.contains('background')) {
@@ -629,9 +654,9 @@ get('join').onclick = () => {
 			}
 		}
 	});
+
 	socket.once('join', cmds => {
 		socket.removeAllListeners('host');
-		setcommands(cmds);
 		get('msg').focus();
 	});
 }
@@ -695,22 +720,47 @@ socket.once('hi', async (rooms, key) => {
 		rooms[name]?.remove();
 		delete rooms[name];
 	});
+
+const edit = files => {
+	for(const file of files) {
+		const url = URL.createObjectURL(file);
+		const img = new Image();
+		img.src = url;
+		get('files').append(img);
+		img.onload = () => URL.revokeObjectURL(url);
+	}
+	get('files').showModal();
+}
+	ondragover = e => {
+		e.preventDefault();
+	}
+	ondrop = e => {
+		e.preventDefault();
+		edit(e.dataTransfer.files);
+    }
 	if(!('serviceWorker' in navigator)) return;
 	const registration = await navigator.serviceWorker.register('/sw.js');
+	navigator.serviceWorker.addEventListener('message', ({ data }) => {
+	    if(data.type != 'images') return;
+		edit(data.files);
+	});
+
 	if(!('PushManager' in window) || Notification.permission == 'denied') return;
 	get('notifications').classList.remove('hidden');
 	let subscription = await registration.pushManager.getSubscription();
-	const checkbox = document.querySelector('#notifications input');
-	checkbox.checked = Boolean(subscription);
+	const [checkbox, start, end] = document.querySelectorAll('#notifications input');
+	let subscribed = checkbox.checked = Boolean(subscription);
 	const channel = new BroadcastChannel('subscription');
-	channel.onmessage = e => checkbox.checked = e.data.status == 'subscribed';
-	const f = url => {
-		fetch(url, {
-			method:'POST',
-			headers:{ 'Content-Type': 'application/json' },
-			body:JSON.stringify(subscription),
-		});
+	channel.onmessage = ({ data }) => {
+		if(subscribed in data) {
+			checkbox.checked = data.subscribed;
+		} else if(start in data) {
+			start.value = data.start;
+		} else if(end in data) {
+			end.value = data.end;
+		}
 	}
+	const options = { method:'POST', headers:{ 'Content-Type': 'application/json' } };
 	checkbox.oninput = async () => {
 		checkbox.disabled = true;
 		if(checkbox.checked && !subscription) {
@@ -723,15 +773,22 @@ socket.once('hi', async (rooms, key) => {
 				userVisibleOnly:true,
 				applicationServerKey:Uint8Array.fromBase64(key, { alphabet:'base64url' })
 			});
-			await f('/subscribe');
-			channel.postMessage({ status:'subscribed' });
+			fetch('/subscribe', { ...options, body:JSON.stringify([subscription, start.value, end.value, Date.now()]) });
+			subscribed = false;
 		} else if(!checkbox.checked && subscription) {
-			await f('/unsubscribe');
-			await subscription.unsubscribe();
 			subscription = null;
-			channel.postMessage({ status:'unsubscribed' });
+			fetch('/unsubscribe', { ...options, body:subscription.endpoint });
+			subscription.unsubscribe();
+			subscribed = true;
 		}
+		channel.postMessage({ subscribed  });
 		checkbox.disabled = false;
+	}
+	start.oninput = end.oninput = () => {
+		if(subscribed) {
+			fetch('/subscribe', { ...options, body:JSON.stringify([subscription, start.value, end.value]) });
+		}
+		channel.postMessage({ start:start.value, end:end.value });
 	}
 });
 </script>
