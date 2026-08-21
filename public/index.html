@@ -9,60 +9,70 @@
 <link rel="icon" type="image/x-icon" href="favicon.ico">
 <style>
 :root { --color0:#ccc; --color1:#000;  --color2:#fff; --color3:#000;  --color4:#eee; --color5:#000; }
+:focus { outline:2px solid currentColor; outline-offset:-2px; }
 body { background:var(--color2); color:var(--color3); }
-#sidebar { background:var(--color0); color:var(--color1); }
-#sidebar > details { border:2px solid var(--color1); margin:1px 2px 1px 2px; }
-#sidebar > details > summary { background:var(--color1); color:var(--color0); }
-.edge, #status, #buttons, #msgform, #autocomplete { background:var(--color4); color:var(--color5); }
-#status, #autocomplete { border:2px solid var(--color5); position:fixed; }
+#sidebar, #float { background:var(--color0); color:var(--color1); padding:2px; }
+.edge, #status, #buttons, #msgform { background:var(--color4); color:var(--color5); }
+#status { border:2px solid var(--color5); position:fixed; }
 #status { pointer-events:none; bottom:2px; left:2px; }
-#autocomplete { position:fixed; bottom:0; position-anchor:--anchor; position-area:top; width:anchor-size(--anchor width); }
-#status:empty, #autocomplete:empty { display:none; }
+#status:empty, #float:has(#preview:empty) { display:none; }
 
-* { box-sizing:border-box; margin:0; padding:0; tab-size:2; word-break:break-word; font-size:16px; }
+* { box-sizing:border-box; margin:0; padding:0; tab-size:2; word-break:break-word; }
+body, input, textarea { font-size:18px; }
 html, body, #wrapper { height:100%; }
+dialog::backdrop { background-color:#00000099; }
 .scrollable { overflow-y:auto; }
 .grid { display:grid; }
 .flex { display:flex; }
 .down { flex-direction:column; }
+.down > input[type="button"] { align-self:center; }
 .stretch { flex:1; min-width:0; min-height:0; }
 .hidden { display:none; }
-details { user-select:none; }
+details { user-select:none; margin:2px; }
 summary { cursor:default; white-space:pre; font-weight:bold; }
-#codeform, #code, #room, #password, #msg { flex:1; min-width:0; min-height:0; }
+input, textarea { border:none; outline:1px solid color-mix(in srgb, currentColor 20%, transparent); outline-offset:-1px; }
 textarea { resize:none; }
 #status, textarea, input:not([type="color"]), summary, .edge:not(:empty), #middle { padding:6px; }
-#files { width:100%; height:100%; margin:auto; text-align:center; }
-#files > img { min-width:30%; min-height:30%; max-width:100%; max-height:100%; object-fit:contain; vertical-align:middle; border:2px solid #000; padding:2px; margin:2px; }
+#dialog { width:100%; height:100%; margin:auto; text-align:center; padding:2px; }
+#images > img { min-width:30%; min-height:30%; max-width:calc(100% - 4px); object-fit:contain; vertical-align:middle; border:2px solid #000; padding:2px; margin:2px; }
 #wrapper { grid-template-rows:auto 1fr auto auto auto; grid-template-columns:auto auto 1fr auto; }
 
-#sidebar { grid-row:1 / -1; overflow-x:hidden; resize:horizontal; width:150px; }
+#burger { position:fixed; top:2px; left:2px; }
+#sidebar { grid-row:1 / -1; overflow-x:hidden; resize:horizontal; width:25vw; font-size:90%; }
 #code, #style textarea { white-space:pre; scroll-padding:3px; }
 #style textarea, #msg { field-sizing:content; }
-#roomlist > a { display:flex; padding:4px; text-decoration:none; margin:2px; }
+#roomlist { display:table; width:100%; border-spacing:0 2px; }
+#roomlist > a { display:table-row; text-decoration:none; white-space:nowrap; }
+#roomlist > a > * { display:table-cell; padding:4px; }
 #roomlist > a:hover { outline:2px solid currentColor; outline-offset:-1px; }
-#roomlist > a:not(#here) > .name { text-decoration:underline; }
-#sidebar > details > div { margin:3px; }
-.count { width:20px; }
-label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
+.count { text-align:right; }
+#here > .name { font-weight:bold; }
+.name { text-decoration:underline; }
+.lock { width:100%; }
+#sidebar > details > div > label { word-break:break-all; }
+#personalsettings > div { margin:3px; }
+label:has(.toggle:not(:checked)) ~ * { opacity:.5; }
 .volume { height:10px; z-index:10000; }
 #colors { grid-template-rows:repeat(3, auto); grid-auto-flow:column; }
 #colors > input { width:100%; }
 #colors > output { text-align:center; }
 
-#top, #bottom, #buttons, #msgform { grid-column:2 / -1; text-align:center; }
+#top, #bottom { text-align:center; }
+#top, #bottom, #buttons, #msgform { grid-column:2 / -1; }
 .msg { white-space:pre-wrap; }
+.msg img { max-height:20px; vertical-align:middle; }
 #join { width:100%; height:100%; }
-#msg { min-height:30px; max-height:200px; anchor-name:--anchor; font-family:inherit; }
+#float { position:fixed; bottom:0; position-anchor:--anchor; position-area:top; width:anchor-size(--anchor width); }
+#msg { display:block; width:100%; min-height:30px; max-height:200px; anchor-name:--anchor; font-family:inherit; }
 #buttons { overflow-x:auto; }
-#buttons > input { height:100%; width:40px; flex-shrink:0; padding-right:0; padding-left:0; }
+#buttons > input { height:100%; flex-shrink:0; }
 
 #big, #super { padding-top:0; }
 #big, #sub { padding-bottom:0; }
 .bold { font-weight:bold; }
 .italic { font-style:italic; }
 .big { font-size:125%; }
-.small, .super, .sub { font-size:80%; }
+.small { font-size:80%; }
 .super { vertical-align:super; }
 .sub { vertical-align:sub; }
 .code { font-family:monospace; }
@@ -75,16 +85,17 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 <link rel="apple-touch-icon" href="icon192.png">
 </head>
 <body>
-<dialog id="files"></dialog>
+<dialog id="dialog">
+	<div id="images"></div>
+	<input type="button" id="cancel" value="cancel">
+	<input type="button" id="share" value="send">
+</dialog>
 <output id="status"></output>
+<input type="button" id="burger" value="☰" class="hidden">
 <div id="wrapper" class="grid">
 	<div id="sidebar" class="flex down scrollable">
-		<form id="roomform" class="flex">
-			<input id="room" spellcheck="false">
-			<input type="submit" value="go">
-		</form>
-		<form id="codeform" class="hidden flex down">
-			<textarea id="code" spellcheck="false"></textarea>
+		<form id="codeform" class="hidden flex down stretch">
+			<textarea id="code" spellcheck="false" class="stretch small"></textarea>
 			<input type="submit" value="run">
 		</form>
 		<details id="roomsettings" class="hidden">
@@ -104,14 +115,19 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 				<input type="submit" value="set colors">
 			</form>
 			<form id="passwordform" class="flex down">
-				<input id="password" spellcheck="false">
+				<input id="password" spellcheck="false" placeholder="room password">
 				<input type="submit" value="set password">
 			</form>
 		</details>
-		<details id="roomlist" open>
+		<details id="rooms" open>
 			<summary>rooms</summary>
+			<div id="roomlist"></div>
+			<form id="roomform" class="flex">
+				<input id="room" spellcheck="false" placeholder="new room" class="stretch">
+				<input type="submit" value="go">
+			</form>
 		</details>
-		<details id="personalsettings" open>
+		<details id="personalsettings">
 			<summary>settings</summary>
 			<div id="roomaudio" class="flex down">
 				<label><input type="checkbox" class="toggle"> new room sound</label>
@@ -134,6 +150,10 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 				<input type="time" value="10:00">
 				<input type="time" value="22:00">
 			</div>
+			<form id="loginform" class="flex">
+				<input id="login" spellcheck="false" placeholder="password" class="stretch">
+				<input type="submit" value="log in">
+			</form>
 		</details>
 	</div>
 	<div id="top" class="edge flex"></div>
@@ -143,21 +163,27 @@ label:has(.toggle:not(:checked)) ~ input { opacity:.5; }
 	</main>
 	<div id="right" class="edge scrollable"></div>
 	<div id="bottom" class="edge flex"></div>
-	<form id="msgform" class="flex">
+	<form id="msgform">
+		<div id="float">
+			<div id="commands" class="code"></div>
+			<div class="flex">
+				<div id="preview" class="stretch"></div>
+				<input type="submit" value="send" id="send" disabled>
+			</div>
+		</div>
 		<textarea id="msg"></textarea>
-		<input type="submit" value="send" id="send" disabled>
 	</form>
 	<div id="buttons" class="flex">
-		<input type="color" id="color">
+		<input type="color" id="colorpicker">
+		<input type="button" value="color" id="color" class="color">
 		<input type="button" value="bold" id="bold" class="bold">
-		<input type="button" value="big" id="big" class="big">
 		<input type="button" value="italic" id="italic" class="italic">
-		<input type="button" value="sub" id="sub" class="small">
+		<input type="button" value="big" id="big" class="big">
 		<input type="button" value="small" id="small" class="small">
-		<input type="button" value="super" id="super" class="small">
+		<input type="button" value="sub" id="sub" class="sub">
+		<input type="button" value="super" id="super" class="super">
 	</div>
 </div>
-<div id="autocomplete" class="code"></div>
 <script src="/socket.io/socket.io.js"></script>
 <script>
 const here = decodeURI(window.location.search.slice(1)) || 'lobby';
@@ -165,68 +191,131 @@ document.title = here+' | ankabuta pwa';
 const get = id => document.getElementById(id);
 onsubmit = e => e.preventDefault();
 let action = 'host';
-let password = false;
+let islocked = false;
 
 get('roomform').onsubmit = e => {
 	location.search = get('room').value;
-}
+};
 
-let width = 150;
+let width = get('sidebar').offsetWidth;
 ontouchstart = e => {
-	if(e.touches[0].pageX > width) return;
-	let x = e.touches[0].pageX;
+	let offset = width - e.touches[0].pageX;
+	if(offset < 0) return;
 	ontouchmove = e => {
-		if(Math.abs(e.touches[0].pageX - x) < 10) {
-			x = e.touches[0].pageX;
-			return;
-		}
 		ontouchmove = e => {
-			width = e.touches[0].pageX;
-			if(width < 30) {
+			if(width) {
+				width = e.touches[0].pageX + offset;
+			} else {
+				offset = 0;
+				width = e.touches[0].pageX;
+			}
+			if(width < 40) {
 				width = 0;
+				get('burger').classList.remove('hidden');
+			} else {
+				get('burger').classList.add('hidden');
 			}
 			get('sidebar').style.width = width+'px';
 		}
 	}
-	ontouchend = e => {
-		ontouchmove = ontouchend = null;
-		if(width < 100) {
-			width = 100;
+	ontouchend = () => ontouchmove = ontouchend = null;
+};
+get('burger').onclick = () => {
+	get('burger').classList.add('hidden');
+	width = 100;
+	get('sidebar').style.width = width+'px';
+};
+
+const create = (text, type) => {
+	let elem;
+	if(type == 'form') {
+		elem = document.createElement('form');
+		const words = text.split(' ');
+		const inputs = [];
+		for(const value of words) {
+			const input = document.createElement('input');
+			if(value[0] == '/') {
+				input.type = 'submit';
+				input.value = value.slice(1);
+			} else {
+				input.placeholder = value;
+				inputs.push(input);
+			}
+			elem.append(input);
+		}
+		elem.onsubmit = e => {
+			say('/'+e.submitter.value+' '+inputs.map(input => input.value.replaceAll(' ', '\u00A0').join(' ')));
+		}
+	} else if(type == 'img') {
+		elem = document.createElement('img');
+		elem.src = '/uploads/'+text;
+	} else if(type == 'code') {
+		elem = document.createElement('span');
+		elem.textContent = text;
+	} else if(type == 'color') {
+		elem = document.createElement('span');
+		const [color, ...rest] = text.split('#');
+		elem.style.color = '#'+color;
+		elem.append(...parse(rest.join('#')));
+	} else {
+		elem = document.createElement('span');
+		elem.append(...parse(text));
+	}
+	elem.className = type;
+	return elem;
+}
+const types = [['form', '[]'], ['big', '<>'], ['small', '><'], ['super', '^^'], ['sub', '~~'], ['bold', '**'], ['italic', '//'], ['code', '{}'], ['color', '##'], ['img', '::']];
+const parse = text => {
+	for(let i = 0; i < text.length; i++) {
+		if(text[i] != '[') continue;
+		const match = types.find(arr => arr[1][0] == text[i+1]);
+		if(!match) continue;
+		const [type, [a, b]] = match;
+		let depth = 1;
+		for(let j = i+2; j < text.length; j++) {
+			if(text.slice(j, j+2) == '['+a) {
+				depth++;
+			} else if(text.slice(j, j+2) == b+']') {
+				depth--;
+				if(!depth) {
+					return [...parse(text.slice(0, i)), create(text.slice(i+2, j), type), ...parse(text.slice(j+2))];
+				}
+			}
 		}
 	}
+	return [text];
+}
+const preview = () => {
+	get('preview').textContent = '';
+	get('preview').append(...parse(get('msg').value));
 }
 
-get('buttons').onclick = get('color').oninput = e => {
+get('buttons').onclick = e => {
+	if(e.target.type != 'button') return;
 	const start = get('msg').selectionStart;
 	const end = get('msg').selectionEnd;
-	let text = get('msg').value.slice(start, end);
-	if(e.target.id == 'color') {
-		text = '['+e.target.value+'#'+text.replace(/^\[#\w+#(.*)#\]$/i, '$1')+'#]';
-	} else if(e.target.id == 'bold') {
-		text = '[*'+text+'*]';
-	} else if(e.target.id == 'big') {
-		text = '[<'+text+'>]';
-	} else if(e.target.id == 'italic') {
-		text = '[/'+text+'/]';
-	} else if(e.target.id == 'sub') {
-		text = '[~'+text+'~]';
-	} else if(e.target.id == 'small') {
-		text = '[>'+text+'<]';
-	} else if(e.target.id == 'super') {
-		text = '[^'+text+'^]';
-	}
+	const text = get('msg').value;
+	const chars = { 'color':[get('colorpicker').value+'#', '#'], 'big':'<>', 'small':'><', 'super':'^^', 'sub':'~~', 'bold':'**', 'italic':'//', 'code':'{}' }[e.target.id];
 	get('msg').focus();
-	get('msg').setRangeText(text, start, end, 'select');
-}
-get('msg').onselect = e => {
-	const [match, color] = get('msg').value.match(/^\[#(\w+)#.*#\]$/i) ?? [null, null];
-	if(!match) return;
-	if(CSS.supports('color', '#'+color)) {
-		get('color').value = '#'+color;
-	} else if(CSS.supports('color', color)) {
-		get('color').value = color;
+	get('msg').value = text.slice(0, start) + '['+chars[0]+text.slice(start, end)+chars[1]+']' + text.slice(end);
+	get('msg').setSelectionRange(start+chars[0].length+1, end+chars[0].length+1);
+	preview();
+};
+get('colorpicker').oninput = () => {
+	get('color').style.color = get('colorpicker').value;
+};
+const msgs = [''];
+let index = 0;
+get('msg').oninput = e => {
+	msgs[index] = get('msg').value;
+	msgs.length = index+1;
+	if(get('msg').value[0] == '/') {
+		get('msg').classList.add('code');
+	} else {
+		get('msg').classList.remove('code');
 	}
-}
+	preview();
+};
 
 const checkbox = document.querySelector('#style input');
 const textarea = document.querySelector('#style textarea');
@@ -242,12 +331,12 @@ const update = () => {
 	} else {
 		stylesheet.remove();
 	}
-}
+};
 update();
 get('style').oninput = () => {
 	localStorage.setItem('style', (checkbox.checked? ' ': '')+textarea.value);
 	update();
-}
+};
 const audios = {};
 for(const [id, url] of [['room', 'https://cdn.pixabay.com/audio/2022/03/10/audio_56b9fd99e8.mp3'], ['msg', 'https://www.myinstants.com/media/sounds/the-end-meow-by-nekocat-just-3-second-1.mp3']]) {
 	const [checkbox, link, volume, button] = document.querySelectorAll('#'+id+'audio input');
@@ -286,9 +375,19 @@ socket.on('disconnect', e => {
 		get('send').disabled = true;
 	}
 });
+
+get('loginform').onsubmit = () => {
+	socket.emit('login', get('login').value);
+};
+socket.once('login', () => {
+	get('loginform').remove();
+});
+
+socket.on('error', error => console.warn(error));
+
 get('join').onclick = () => {
 	if(action == 'join') {
-		socket.emit('join', password? prompt('password'): '');
+		socket.emit('join', islocked? prompt('password'): '');
 	} else {
 		socket.emit('host');
 	}
@@ -297,11 +396,11 @@ get('join').onclick = () => {
 	action = '';
 	get('join').remove();
 	get('send').disabled = false;
-
-	socket.on('error', error => console.warn(error));
+	get('roomform').classList.add('hidden');
 
 	let say = msg => socket.emit('say', msg);
 	get('msgform').onsubmit = e => {
+		get('preview').textContent = '';
 		const msg = get('msg').value;
 		if(!msg) return;
 		say(msg);
@@ -310,10 +409,7 @@ get('join').onclick = () => {
 		msgs.length = index+1;
 		get('msg').value = '';
 		get('msg').focus();
-	}
-
-	const msgs = [''];
-	let index = 0;
+	};
 	get('msg').onkeydown = e => {
 		if(e.key == 'Enter' && !e.shiftKey) {
 			get('send').click();
@@ -326,51 +422,40 @@ get('join').onclick = () => {
 				get('msg').value = msgs[++index];
 			} else return;
 			e.preventDefault();
+			preview();
 		}
-	}
+	};
 
-	let commands = [];
-	get('msg').oninput = e => {
-		msgs[index] = get('msg').value;
-		msgs.length = index+1;
-		if(get('msg').value[0] == '/') {
-			get('msg').classList.add('code');
-		} else {
-			get('msg').classList.remove('code');
-		}
-	}
-	const showcommands = () => {
-		get('autocomplete').textContent = '';
-		const msg = get('msg').value;
-		if(msg[0] != '/') return;
-		const msgwords = msg.slice(0, get('msg').selectionStart).split(' ');
-		const index = msgwords.length-1;
-		for(let i = 0; i < commands.length; i++) {
-			const cmd = commands[i];
-			const cmdwords = cmd.split(' ');
-			if(!index && cmd.startsWith(msgwords[0])) {
-				const b = document.createElement('b');
-				b.textContent = msg;
-				const div = document.createElement('div');
-				div.append(b, cmd.slice(msg.length));
-				get('autocomplete').append(div);
-			} else if(cmdwords[0] == msgwords[0]) {
-				const b = document.createElement('b');
-				b.textContent = cmdwords[index];
-				const div = document.createElement('div');
-				div.append(
-					cmdwords.slice(0, index).join(' ')+' ',
-					b,
-					' '+cmdwords.slice(index+1).join(' ')
-				);
-				get('autocomplete').append(div);
+	socket.on('setcommands', commands => {
+		get('msg').onselectionchange = () => {
+			get('commands').textContent = '';
+			const msg = get('msg').value;
+			if(msg[0] != '/') return;
+			const msgwords = msg.slice(0, get('msg').selectionStart).split(' ');
+			const index = msgwords.length-1;
+			for(let i = 0; i < commands.length; i++) {
+				const cmd = commands[i];
+				const cmdwords = cmd.split(' ');
+				if(!index && cmd.startsWith(msgwords[0])) {
+					const b = document.createElement('b');
+					b.textContent = msg;
+					const div = document.createElement('div');
+					div.append(b, cmd.slice(msg.length));
+					get('commands').append(div);
+				} else if(cmdwords[0] == msgwords[0]) {
+					const b = document.createElement('b');
+					b.textContent = cmdwords[index];
+					const div = document.createElement('div');
+					div.append(
+						cmdwords.slice(0, index).join(' ')+' ',
+						b,
+						' '+cmdwords.slice(index+1).join(' ')
+					);
+					get('commands').append(div);
+				}
 			}
 		}
-	}
-	get('msg').onselectionchange = showcommands;
-	socket.on('setcommands', cmds => {
-		commands = cmds;
-		showcommands();
+		get('msg').onselectionchange();
 	});
 
 	socket.on('addmsgs', (msgs, side) => {
@@ -380,47 +465,7 @@ get('join').onclick = () => {
 			} else {
 				const div = document.createElement('div');
 				div.classList.add('msg');
-				const types = { '[]':'form', '<>':'big', '><':'small', '^^':'super', '~~':'sub', '**':'bold', '//':'italic', '{}':'code', '##':'color' };
-				const regex = new RegExp('\\[('+Object.keys(types).map(symbols => '\\'+symbols[0]+'.*\\'+symbols[1]).join('|')+')\\]');
-				const build = text => {
-					let elem;
-					const type = types[text[0]+text.slice(-1)];
-					let content = text.slice(1, -1);
-					if(type == 'form') {
-						elem = document.createElement('form');
-						const words = content.split(' ');
-						const inputs = [];
-						for(const value of words) {
-							const input = document.createElement('input');
-							if(value[0] == '/') {
-								input.type = 'submit';
-								input.value = value.slice(1);
-							} else {
-								input.placeholder = value;
-								inputs.push(input);
-							}
-							elem.append(input);
-						}
-						content = '';
-						elem.onsubmit = e => {
-							say('/'+e.submitter.value+' '+inputs.map(input => input.value.replaceAll(' ', '\u00A0').join(' ')));
-						}
-					} else if(type == 'code') {
-						elem = document.createElement('span');
-						elem.className = type;
-						elem.textContent = content;
-						return elem;
-					} else if(type == 'color') {
-						elem = document.createElement('span');
-						elem.style.color = text.match(/(#\w+)#/)?.[0];
-					} else {
-						elem = document.createElement('span');
-						elem.className = type;
-					}
-					elem.append(...content.split(regex).map((text, i) => i%2? build(text): text));
-					return elem;
-				}
-				div.append(...msg.split(regex).map((text, i) => i%2? build(text): text));
+				div.append(...parse(msg));
 				get(side).append(div);
 				div.scrollIntoView();
 				if(id != undefined) {
@@ -455,11 +500,10 @@ get('join').onclick = () => {
 		stylesheet?.remove();
 		socket.removeAllListeners('join');
 		const users = new Map([[0, hash]]);
-		get('roomform').classList.add('hidden');
 		get('style').classList.add('hidden');
 		get('codeform').classList.remove('hidden');
 		get('roomsettings').classList.remove('hidden');
-		get('roomlist').open = get('personalsettings').open = false;
+		get('rooms').open = get('personalsettings').open = false;
 		if(innerHeight > 600) {
 			get('roomsettings').open = true;
 		}
@@ -468,7 +512,7 @@ get('join').onclick = () => {
 				e.preventDefault();
 				get('run').click();
 			}
-		}
+		};
 		get('code').value = `
 			const defaultnames = ['Maka', 'Lea', 'Kawena', 'Kekoa', 'Waiola', 'Hanalei', 'Kamalani', 'Malina', 'Kanakanui', 'Lilinoe', 'Momi', 'Waipuna', 'Makoa', 'Kalei', 'Loke', 'Ululani', 'Kona', 'Kamaile', 'Maluhia', 'Leinani', 'Kaleinani', 'Mana', 'Kapuni', 'Kealoha', 'Kiele', 'Kulamanu', 'Mokihana', 'Kapono', 'Maunakea', 'Pauahi', 'Kaliko', 'Lei', 'Keola', 'Hualani', 'Kamalu', 'Makana', 'Haunani', 'Kaulana', 'Keahi', 'Kalua', 'Luana', 'Kainalu', 'Makanui', 'Kaimana', 'Punahele', 'Kanoa', 'Alana', 'Maile', 'Melia', 'Mililani', 'Keawe', 'Makai', 'Kailani', 'Momilani', 'Hina', 'Hanohano', 'Kalama', 'Nohea', 'Kainoa', 'Lani', 'Kapulani', 'Uluwehi', 'Kaipo', 'Onaona', 'Koa', 'Kanani', 'Lokelani', 'Pumehana', 'Lehua', 'Kekona', 'Kaluhi', 'Nahenahe', 'Lana', 'Kaihe', 'Puamana', 'Noelani', 'Kawai', 'Leihua', 'Kapua', 'Nani', 'Kaila', 'Puna', 'Kanamu', 'Mamo', 'Keona', 'Wailani', 'Ikaika', 'Aloha', 'Akoni', 'Kawelo', 'Kiani', 'Kamaka', 'Nanea', 'Mahina', 'Kahiau', 'Hekili', 'Hiapo', 'Lono', 'Kaina', 'Pua', 'Kini', 'Kaleo', 'Makamae', 'Kalena', 'Ipo', 'Leilani', 'Kahula', 'Pali', 'Leimamo', 'Keao', 'Manuia', 'Lanakila', 'Palikapu', 'Hiwahiwa', 'Kilohana', 'Keilani', 'Anuhea', 'Kalani'];
 			function join(user, msg) {
@@ -501,6 +545,7 @@ get('join').onclick = () => {
 					users.send('[*'+user.name+'*]: '+msg);
 				}
 			}`.slice(1).replace(/^\t{3}/gm, '');
+		get('code').setSelectionRange(0, 0);
 		get('code').focus();
 		const codes = [];
 		let worker;
@@ -580,34 +625,34 @@ get('join').onclick = () => {
 			worker = new Worker(blobURL);
 			worker.onmessage = e => {
 				socket.emit(...e.data);
-			}
+			};
 			worker.onerror = e => {
 				get('code').style.backgroundColor = '#f00';
 				codes.pop();
 				if(codes.length) {
 					run(codes.at(-1));
 				}
-			}
+			};
 			socket.emit('clear', [...users.keys()], ['top', 'right', 'bottom', 'left', 'middle']);
 			users.forEach((hash, id) => worker.postMessage(['join', id, hash]));
-		}
+		};
 		run(get('code').value);
 		get('codeform').onsubmit = e => {
 			get('code').style.backgroundColor = null;
 			run(get('code').value);
 			get('code').focus();
-		}
+		};
 		say = msg => {
 			console.log('0: '+msg);
 			worker.postMessage(['hear', 0, msg]);
-		}
+		};
 		const inputs = [...document.querySelectorAll('#colors > input[type="color"]')];
 		get('colorform').onsubmit = e => {
 			socket.emit('setcolors', [...users.keys()], inputs.map(input => input.value));
-		}
+		};
 		get('passwordform').onsubmit = e => {
 			socket.emit('setpassword', get('password').value);
-		}
+		};
 		socket.on('hear', (id, msg) => {
 			console.log(id+': '+msg);
 			worker.postMessage(['hear', id, msg]);
@@ -631,7 +676,7 @@ get('join').onclick = () => {
 			} else {
 				input.previousElementSibling.previousElementSibling.style.color = input.value;
 			}
-		}
+		};
 		inputs.forEach(input => update({ target:input }));
 		get('colors').oncontextmenu = e => {
 			if(e.target.tagName == 'OUTPUT') {
@@ -642,7 +687,7 @@ get('join').onclick = () => {
 			} else return;
 			e.preventDefault();
 			update(e);
-		}
+		};
 		get('colors').onmousedown = a => {
 			if(a.target.type != 'color') return;
 			onmouseup = b => {
@@ -652,7 +697,7 @@ get('join').onclick = () => {
 				update(a);
 				update(b);
 			}
-		}
+		};
 	});
 
 	socket.once('join', cmds => {
@@ -671,7 +716,7 @@ socket.once('hi', async (rooms, key) => {
 				document.documentElement.style.setProperty('--color'+i, colors[i]);
 			}
 		}
-	}
+	};
 	socket.on('setcolors', setcolors);
 	socket.on('setcount', (name, count) => {
 		rooms.get(name).children[0].textContent = count;
@@ -679,7 +724,7 @@ socket.once('hi', async (rooms, key) => {
 	socket.on('setlock', (name, locked) => {
 		rooms.get(name).children[2].textContent = locked? '🔒': '';
 		if(name == here) {
-			password = locked;
+			islocked = locked;
 		}
 	});
 	const addroom = (name, room) => {
@@ -698,10 +743,10 @@ socket.once('hi', async (rooms, key) => {
 				get('join').value = 'join '+here;
 			}
 		}
-		get('roomlist').append(a);
+		get('roomlist').prepend(a);
 		rooms.set(name, a);
 		setcolors(name, room.colors);
-	}
+	};
 	rooms.forEach((room, name) => addroom(name, room));
 	if(action == 'host') {
 		get('join').value = 'host '+here;
@@ -721,28 +766,57 @@ socket.once('hi', async (rooms, key) => {
 		delete rooms[name];
 	});
 
-const edit = files => {
-	for(const file of files) {
-		const url = URL.createObjectURL(file);
-		const img = new Image();
-		img.src = url;
-		get('files').append(img);
-		img.onload = () => URL.revokeObjectURL(url);
-	}
-	get('files').showModal();
-}
+	const buffers = [];
+	const preview = files => {
+		for(const file of files) {
+			const url = URL.createObjectURL(file);
+			const img = new Image();
+			img.src = url;
+			get('images').append(img);
+			img.onload = () => {
+				URL.revokeObjectURL(url);
+				get('dialog').showModal();
+				file.arrayBuffer().then(buffer => buffers.push(buffer));
+			};
+			img.onerror = () => {
+				URL.revokeObjectURL(url);
+				img.remove();
+			};
+		}
+	};
 	ondragover = e => {
 		e.preventDefault();
-	}
+	};
 	ondrop = e => {
 		e.preventDefault();
-		edit(e.dataTransfer.files);
-    }
+		preview(e.dataTransfer.files);
+    };
 	if(!('serviceWorker' in navigator)) return;
 	const registration = await navigator.serviceWorker.register('/sw.js');
 	navigator.serviceWorker.addEventListener('message', ({ data }) => {
 	    if(data.type != 'images') return;
-		edit(data.files);
+		preview(data.files);
+	});
+	let timeout;
+	get('cancel').onclick = () => {
+		clearTimeout(timeout);
+		get('dialog').close();
+		get('images').textContent = '';
+		get('share').value = 'send';
+		get('share').disabled = false;
+		buffers.length = 0;
+	};
+	get('share').onclick = () => {
+		get('cancel').focus();
+		get('share').value = 'sending...';
+		get('share').disabled = true;
+		timeout = setTimeout(() => {
+			socket.emit('pic', buffers);
+			get('cancel').click();
+		}, 5000);
+	};
+	socket.on('pic', text => {
+		get('msg').value += text;
 	});
 
 	if(!('PushManager' in window) || Notification.permission == 'denied') return;
@@ -759,8 +833,7 @@ const edit = files => {
 		} else if(end in data) {
 			end.value = data.end;
 		}
-	}
-	const options = { method:'POST', headers:{ 'Content-Type': 'application/json' } };
+	};
 	checkbox.oninput = async () => {
 		checkbox.disabled = true;
 		if(checkbox.checked && !subscription) {
@@ -773,23 +846,23 @@ const edit = files => {
 				userVisibleOnly:true,
 				applicationServerKey:Uint8Array.fromBase64(key, { alphabet:'base64url' })
 			});
-			fetch('/subscribe', { ...options, body:JSON.stringify([subscription, start.value, end.value, Date.now()]) });
+			socket.emit('subscribe', subscription, start.value, end.value, Date.now());
 			subscribed = false;
 		} else if(!checkbox.checked && subscription) {
-			subscription = null;
-			fetch('/unsubscribe', { ...options, body:subscription.endpoint });
+			socket.emit('unsubscribe', subscription.endpoint);
 			subscription.unsubscribe();
+			subscription = null;
 			subscribed = true;
 		}
 		channel.postMessage({ subscribed  });
 		checkbox.disabled = false;
-	}
+	};
 	start.oninput = end.oninput = () => {
 		if(subscribed) {
 			fetch('/subscribe', { ...options, body:JSON.stringify([subscription, start.value, end.value]) });
 		}
 		channel.postMessage({ start:start.value, end:end.value });
-	}
+	};
 });
 </script>
 </body>
