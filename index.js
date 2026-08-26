@@ -265,7 +265,10 @@ io.on('connection', socket => {
 		});
 	}
 	socket.on('pic', arrayBuffers => {
-		if(!socket.data.admin) return;
+		if(!socket.data.admin) {
+			socket.emit('error', 'log in to send images');
+			return;
+		}
 		const images = [];
 		for(const arrayBuffer of arrayBuffers) {
 			buffer = Buffer.from(arrayBuffer);
@@ -283,7 +286,7 @@ io.on('connection', socket => {
 			});
 			images.push('[:'+name+':]');
 		}
-		get(0).emit('hear', socket.data.userid, images.join(''));
+		socket.emit('pic', images.join(''));
 	});
 	socket.on('subscribe', (sub, start, end, time) => {
 		const diff = Date.now()-time;
