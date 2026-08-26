@@ -10,16 +10,17 @@
 <style>
 :root { --color0:#ccc; --color1:#000;  --color2:#fff; --color3:#000;  --color4:#eee; --color5:#000; }
 :focus { outline:2px solid currentColor; outline-offset:-2px; }
+a:focus { text-decoration:none; outline-offset:0; }
 body { background:var(--color2); color:var(--color3); }
-#sidebar, #float { background:var(--color0); color:var(--color1); padding:2px; }
-.edge, #status, #buttons, #msgform { background:var(--color4); color:var(--color5); }
+#sidebar, #msgform, #buttons { background:var(--color0); color:var(--color1); }
+.edge, #commands, #status { background:var(--color4); color:var(--color5); }
 #status { border:2px solid var(--color5); position:fixed; }
 #status { pointer-events:none; bottom:2px; left:2px; }
-#status:empty, #float:has(#preview:empty) { display:none; }
+#status:empty, #commands:empty, #preview:empty { display:none; }
 
 * { box-sizing:border-box; margin:0; padding:0; tab-size:2; word-break:break-word; }
 body, input, textarea { font-size:18px; }
-html, body, #wrapper { height:100%; }
+html, body, #wrapper { height:100dvh; }
 dialog::backdrop { background-color:#00000099; }
 .scrollable { overflow-y:auto; }
 .grid { display:grid; }
@@ -32,13 +33,16 @@ details { user-select:none; margin:2px; }
 summary { cursor:default; white-space:pre; font-weight:bold; }
 input, textarea { border:none; outline:1px solid color-mix(in srgb, currentColor 20%, transparent); outline-offset:-1px; }
 textarea { resize:none; }
-#status, textarea, input:not([type="color"]), summary, .edge:not(:empty), #middle { padding:6px; }
-#dialog { width:100%; height:100%; margin:auto; text-align:center; padding:2px; }
+#status, textarea, input:not([type="color"]), summary, #middle, .edge:not(:empty), #preview { padding:6px; }
+#dialog { margin:auto; text-align:center; padding:2px; }
 #images > img { min-width:30%; min-height:30%; max-width:calc(100% - 4px); object-fit:contain; vertical-align:middle; border:2px solid #000; padding:2px; margin:2px; }
-#wrapper { grid-template-rows:auto 1fr auto auto auto; grid-template-columns:auto auto 1fr auto; }
+#dialog:not(:has(#login)) > #images:empty:before { content:'drop images here'; opacity:.5; font-style:italic; padding:30px; display:block; }
+#images:empty ~ #controls { display:none; }
+#controls { justify-content:space-between; margin:2px; }
+#wrapper { grid-template-rows:auto 1fr auto auto auto auto auto; grid-template-columns:auto auto 1fr auto; }
 
 #burger { position:fixed; top:2px; left:2px; }
-#sidebar { grid-row:1 / -1; overflow-x:hidden; resize:horizontal; width:25vw; font-size:90%; }
+#sidebar { grid-row:1 / -1; overflow-x:hidden; resize:horizontal; width:25vw; font-size:90%; padding:2px; }
 #code, #style textarea { white-space:pre; scroll-padding:3px; }
 #style textarea, #msg { field-sizing:content; }
 #roomlist { display:table; width:100%; border-spacing:0 2px; }
@@ -50,7 +54,7 @@ textarea { resize:none; }
 .name { text-decoration:underline; }
 .lock { width:100%; }
 #sidebar > details > div > label { word-break:break-all; }
-#personalsettings > div { margin:3px; }
+#personalsettings > div { margin:0 0 3px 0; }
 label:has(.toggle:not(:checked)) ~ * { opacity:.5; }
 .volume { height:10px; z-index:10000; }
 #colors { grid-template-rows:repeat(3, auto); grid-auto-flow:column; }
@@ -58,12 +62,16 @@ label:has(.toggle:not(:checked)) ~ * { opacity:.5; }
 #colors > output { text-align:center; }
 
 #top, #bottom { text-align:center; }
-#top, #bottom, #buttons, #msgform { grid-column:2 / -1; }
+#top, #bottom, #commands, #preview, #msgform, #buttons { grid-column:2 / -1; }
 .msg { white-space:pre-wrap; }
+#middle > .msg { margin-bottom:3px; }
 .msg img { max-height:20px; vertical-align:middle; }
 #join { width:100%; height:100%; }
-#float { position:fixed; bottom:0; position-anchor:--anchor; position-area:top; width:anchor-size(--anchor width); }
-#msg { display:block; width:100%; min-height:30px; max-height:200px; anchor-name:--anchor; font-family:inherit; }
+#commands { padding:3px; font-size:90%; }
+#commands > div { padding:3px; }
+.clickable { cursor:pointer; }
+#commands, #preview { max-height:100px; overflow:auto; }
+#msg { display:block; width:100%; min-height:30px; max-height:200px; font-family:inherit; }
 #buttons { overflow-x:auto; }
 #buttons > input { height:100%; flex-shrink:0; }
 
@@ -76,6 +84,7 @@ label:has(.toggle:not(:checked)) ~ * { opacity:.5; }
 .super { vertical-align:super; }
 .sub { vertical-align:sub; }
 .code { font-family:monospace; }
+.link { color:LinkText; text-decoration:underline; }
 
 @media (max-height:20rem) {
 	#roomsettings:not(.hidden) ~ details { display:none; }
@@ -86,14 +95,21 @@ label:has(.toggle:not(:checked)) ~ * { opacity:.5; }
 </head>
 <body>
 <dialog id="dialog">
+	<form id="loginform" class="flex">
+		<input id="login" spellcheck="false" placeholder="password" class="stretch">
+		<input type="submit" value="log in">
+	</form>
 	<div id="images"></div>
-	<input type="button" id="cancel" value="cancel">
-	<input type="button" id="share" value="send">
+	<div id="controls" class="flex">
+		<input type="button" id="cancel" value="cancel">
+		<input type="button" id="share" value="upload">
+	</div>
 </dialog>
 <output id="status"></output>
 <input type="button" id="burger" value="☰" class="hidden">
 <div id="wrapper" class="grid">
 	<div id="sidebar" class="flex down scrollable">
+		<iframe id="video" class="hidden" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 		<form id="codeform" class="hidden flex down stretch">
 			<textarea id="code" spellcheck="false" class="stretch small"></textarea>
 			<input type="submit" value="run">
@@ -150,10 +166,7 @@ label:has(.toggle:not(:checked)) ~ * { opacity:.5; }
 				<input type="time" value="10:00">
 				<input type="time" value="22:00">
 			</div>
-			<form id="loginform" class="flex">
-				<input id="login" spellcheck="false" placeholder="password" class="stretch">
-				<input type="submit" value="log in">
-			</form>
+			<input type="button" id="upload" value="upload">
 		</details>
 	</div>
 	<div id="top" class="edge flex"></div>
@@ -163,25 +176,14 @@ label:has(.toggle:not(:checked)) ~ * { opacity:.5; }
 	</main>
 	<div id="right" class="edge scrollable"></div>
 	<div id="bottom" class="edge flex"></div>
-	<form id="msgform">
-		<div id="float">
-			<div id="commands" class="code"></div>
-			<div class="flex">
-				<div id="preview" class="stretch"></div>
-				<input type="submit" value="send" id="send" disabled>
-			</div>
-		</div>
-		<textarea id="msg"></textarea>
+	<div id="commands" class="code"></div>
+	<div id="preview" class="msg"></div>
+	<form id="msgform" class="flex">
+		<textarea id="msg" class="stretch"></textarea>
+		<input type="submit" value="send" id="send" disabled>
 	</form>
 	<div id="buttons" class="flex">
 		<input type="color" id="colorpicker">
-		<input type="button" value="color" id="color" class="color">
-		<input type="button" value="bold" id="bold" class="bold">
-		<input type="button" value="italic" id="italic" class="italic">
-		<input type="button" value="big" id="big" class="big">
-		<input type="button" value="small" id="small" class="small">
-		<input type="button" value="sub" id="sub" class="sub">
-		<input type="button" value="super" id="super" class="super">
 	</div>
 </div>
 <script src="/socket.io/socket.io.js"></script>
@@ -248,7 +250,24 @@ const create = (text, type) => {
 		}
 	} else if(type == 'img') {
 		elem = document.createElement('img');
-		elem.src = '/uploads/'+text;
+		elem.src = text.startsWith('http')? text: '/uploads/'+text;
+	} else if(type == 'link') {
+		elem = document.createElement('a');
+		const id = text.match(/(?<=^|\.be\/|\/v\/|\?v=|\/embed\/|\/shorts\/)[0-9A-Za-z_-]{11}(?=\b\S*$)/)?.[0];
+		elem.href = id? 'https://youtu.be/'+id: text;
+		elem.textContent = text;
+		if(id) {
+			fetch('https://noembed.com/embed?url='+elem.href).then(x => x.json()).then(x => elem.textContent = x.error ?? x.title);
+			elem.onclick = e => {
+				e.preventDefault();
+				get('video').style.aspectRatio = text.includes('/shorts/')? '9 / 16': '16 / 9';
+				get('video').classList.remove('hidden');
+				get('video').src = 'https://www.youtube-nocookie.com/embed/'+id;
+				get('video').scrollIntoView();
+			}
+		} else {
+			elem.target = '_blank';
+		}
 	} else if(type == 'code') {
 		elem = document.createElement('span');
 		elem.textContent = text;
@@ -264,7 +283,7 @@ const create = (text, type) => {
 	elem.className = type;
 	return elem;
 }
-const types = [['form', '[]'], ['big', '<>'], ['small', '><'], ['super', '^^'], ['sub', '~~'], ['bold', '**'], ['italic', '//'], ['code', '{}'], ['color', '##'], ['img', '::']];
+const types = [['color', '##'], ['form', '[]'], ['big', '<>'], ['small', '><'], ['super', '^^'], ['sub', '~~'], ['bold', '**'], ['italic', '//'], ['code', '{}'], ['link', '__'], ['img', '::']];
 const parse = text => {
 	for(let i = 0; i < text.length; i++) {
 		if(text[i] != '[') continue;
@@ -289,24 +308,28 @@ const preview = () => {
 	get('preview').textContent = '';
 	get('preview').append(...parse(get('msg').value));
 }
-
-get('buttons').onclick = e => {
-	if(e.target.type != 'button') return;
-	const start = get('msg').selectionStart;
-	const end = get('msg').selectionEnd;
-	const text = get('msg').value;
-	const chars = { 'color':[get('colorpicker').value+'#', '#'], 'big':'<>', 'small':'><', 'super':'^^', 'sub':'~~', 'bold':'**', 'italic':'//', 'code':'{}' }[e.target.id];
-	get('msg').focus();
-	get('msg').value = text.slice(0, start) + '['+chars[0]+text.slice(start, end)+chars[1]+']' + text.slice(end);
-	get('msg').setSelectionRange(start+chars[0].length+1, end+chars[0].length+1);
-	preview();
-};
+for(const [type, chars] of types) {
+	const button = document.createElement('input');
+	button.type = 'button';
+	button.value = button.id = button.className = type;
+	get('buttons').append(button);
+	button.onclick = () => {
+		const start = get('msg').selectionStart;
+		const end = get('msg').selectionEnd;
+		const text = get('msg').value;
+		get('msg').focus();
+		const color = chars == '##'? get('colorpicker').value: '';
+		get('msg').value = text.slice(0, start) + '['+color+chars[0]+text.slice(start, end)+chars[1]+']' + text.slice(end);
+		get('msg').setSelectionRange(start+chars[0].length+1, end+chars[0].length+1);
+		get('msg').oninput();
+	};
+}
 get('colorpicker').oninput = () => {
 	get('color').style.color = get('colorpicker').value;
 };
 const msgs = [''];
 let index = 0;
-get('msg').oninput = e => {
+get('msg').oninput = () => {
 	msgs[index] = get('msg').value;
 	msgs.length = index+1;
 	if(get('msg').value[0] == '/') {
@@ -376,11 +399,77 @@ socket.on('disconnect', e => {
 	}
 });
 
+const buffers = [];
+const showfiles = files => {
+	for(const file of files) {
+		const url = URL.createObjectURL(file);
+		const img = new Image();
+		img.src = url;
+		get('images').append(img);
+		img.onload = () => {
+			URL.revokeObjectURL(url);
+			file.arrayBuffer().then(buffer => {
+				const index = buffers.length;
+				buffers[index] = buffer;
+				img.onclick = () => {
+					buffers.splice(index, 1);
+					img.remove();
+				};
+			});
+		};
+		img.onerror = () => {
+			URL.revokeObjectURL(url);
+			img.remove();
+		};
+	}
+};
+get('upload').onclick = () => {
+	get('dialog').showModal();
+	get('login')?.focus();
+	ondragover = e => {
+		if(!e.dataTransfer.types.includes('Files')) return;
+		e.preventDefault();
+	};
+	ondrop = e => {
+		if(!e.dataTransfer.types.includes('Files')) return;
+		e.preventDefault();
+		get('dialog').style.pointerEvents = 'auto';
+		showfiles(e.dataTransfer.files);
+	};
+	get('dialog').onclick = e => {
+		if(e.target == get('dialog')) {
+			get('dialog').close();
+		}
+	};
+};
 get('loginform').onsubmit = () => {
 	socket.emit('login', get('login').value);
 };
 socket.once('login', () => {
 	get('loginform').remove();
+});
+let timeout;
+get('cancel').onclick = () => {
+	clearTimeout(timeout);
+	get('dialog').close();
+	get('images').textContent = '';
+	get('share').value = 'upload';
+	get('share').disabled = false;
+	buffers.length = 0;
+};
+get('share').onclick = () => {
+	get('cancel').focus();
+	get('share').value = 'uploading...';
+	get('share').disabled = true;
+	timeout = setTimeout(() => {
+		socket.emit('pic', buffers);
+		get('cancel').onclick();
+	}, 5000);
+};
+socket.on('pic', text => {
+	get('msg').value += text;
+	get('msg').focus();
+	get('msg').oninput();
 });
 
 socket.on('error', error => console.warn(error));
@@ -409,6 +498,7 @@ get('join').onclick = () => {
 		msgs.length = index+1;
 		get('msg').value = '';
 		get('msg').focus();
+		get('msg').onselectionchange();
 	};
 	get('msg').onkeydown = e => {
 		if(e.key == 'Enter' && !e.shiftKey) {
@@ -435,23 +525,24 @@ get('join').onclick = () => {
 			const index = msgwords.length-1;
 			for(let i = 0; i < commands.length; i++) {
 				const cmd = commands[i];
+				if(!cmd.startsWith(msgwords[0])) return;
 				const cmdwords = cmd.split(' ');
-				if(!index && cmd.startsWith(msgwords[0])) {
-					const b = document.createElement('b');
-					b.textContent = msg;
-					const div = document.createElement('div');
-					div.append(b, cmd.slice(msg.length));
-					get('commands').append(div);
-				} else if(cmdwords[0] == msgwords[0]) {
-					const b = document.createElement('b');
-					b.textContent = cmdwords[index];
-					const div = document.createElement('div');
-					div.append(
-						cmdwords.slice(0, index).join(' ')+' ',
-						b,
-						' '+cmdwords.slice(index+1).join(' ')
-					);
-					get('commands').append(div);
+				const b = document.createElement('b');
+				b.textContent = cmdwords[index];
+				const div = document.createElement('div');
+				div.append(
+					cmdwords.slice(0, index).join(' ')+' ',
+					b,
+					' '+cmdwords.slice(index+1).join(' ')
+				);
+				get('commands').append(div);
+				if(!index) {
+					div.classList.add('clickable');
+					div.onclick = () => {
+						get('msg').value = cmdwords[0]+' ';
+						get('msg').focus();
+						get('msg').oninput();
+					};
 				}
 			}
 		}
@@ -766,57 +857,12 @@ socket.once('hi', async (rooms, key) => {
 		delete rooms[name];
 	});
 
-	const buffers = [];
-	const preview = files => {
-		for(const file of files) {
-			const url = URL.createObjectURL(file);
-			const img = new Image();
-			img.src = url;
-			get('images').append(img);
-			img.onload = () => {
-				URL.revokeObjectURL(url);
-				get('dialog').showModal();
-				file.arrayBuffer().then(buffer => buffers.push(buffer));
-			};
-			img.onerror = () => {
-				URL.revokeObjectURL(url);
-				img.remove();
-			};
-		}
-	};
-	ondragover = e => {
-		e.preventDefault();
-	};
-	ondrop = e => {
-		e.preventDefault();
-		preview(e.dataTransfer.files);
-    };
 	if(!('serviceWorker' in navigator)) return;
 	const registration = await navigator.serviceWorker.register('/sw.js');
 	navigator.serviceWorker.addEventListener('message', ({ data }) => {
 	    if(data.type != 'images') return;
-		preview(data.files);
-	});
-	let timeout;
-	get('cancel').onclick = () => {
-		clearTimeout(timeout);
-		get('dialog').close();
-		get('images').textContent = '';
-		get('share').value = 'send';
-		get('share').disabled = false;
-		buffers.length = 0;
-	};
-	get('share').onclick = () => {
-		get('cancel').focus();
-		get('share').value = 'sending...';
-		get('share').disabled = true;
-		timeout = setTimeout(() => {
-			socket.emit('pic', buffers);
-			get('cancel').click();
-		}, 5000);
-	};
-	socket.on('pic', text => {
-		get('msg').value += text;
+		get('dialog').showModal();
+		showfiles(data.files);
 	});
 
 	if(!('PushManager' in window) || Notification.permission == 'denied') return;
