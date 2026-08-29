@@ -180,11 +180,11 @@ io.on('connection', socket => {
 		clearTimeout(timeouts.get(socket.id));
 		timeouts.delete(socket.id);
 		if(!room) return;
-		if(room.users.get(0) == socket.id) {
-			host();
-		} else {
-			get(0).emit('online', userid);
+		if(socket.data.userid) {
+			get(0).emit('online', socket.data.userid);
 			join();
+		} else {
+			host();
 		}
 	}
 	function join() {
@@ -214,7 +214,9 @@ io.on('connection', socket => {
 			socket.emit('kick', reason);
 			socket.removeAllListeners('say');
 			socket.removeAllListeners('disconnect');
-			die(reason);
+			if(get(0)) {
+				die(reason);
+			}
 		}
 	}
 	function host() {
