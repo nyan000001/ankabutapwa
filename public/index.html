@@ -19,7 +19,7 @@ body { background:var(--color2); color:var(--color3); }
 #status:empty, #commands:empty, #preview:empty { display:none; }
 
 * { box-sizing:border-box; margin:0; padding:0; tab-size:2; word-break:break-word; }
-body, input, textarea { font-size:18px; }
+body, input, textarea { font-size:16px; }
 html, body, #wrapper { height:100dvh; }
 dialog::backdrop { background-color:#00000099; }
 .scrollable { overflow-y:auto; }
@@ -42,8 +42,9 @@ textarea { resize:none; }
 #wrapper { grid-template-rows:auto 1fr auto auto auto auto auto; grid-template-columns:auto auto 1fr auto; }
 
 #burger { position:fixed; top:2px; left:2px; }
-#sidebar { grid-row:1 / -1; overflow-x:hidden; resize:horizontal; width:25vw; font-size:90%; padding:2px; }
+#sidebar { grid-row:1 / -1; overflow-x:hidden; resize:horizontal; width:25vw; }
 #code, #style textarea { white-space:pre; scroll-padding:3px; }
+.error { outline-color:#f00; }
 #style textarea, #msg { field-sizing:content; }
 #roomlist { display:table; width:100%; border-spacing:0 2px; }
 #roomlist > a { display:table-row; text-decoration:none; white-space:nowrap; }
@@ -60,17 +61,24 @@ label:has(.toggle:not(:checked)) ~ * { opacity:.5; }
 #colors { grid-template-rows:repeat(3, auto); grid-auto-flow:column; }
 #colors > input { width:100%; }
 #colors > output { text-align:center; }
+#upload { display:block; margin:auto; }
 
 #top, #bottom { text-align:center; }
 #top, #bottom, #commands, #preview, #msgform, #buttons { grid-column:2 / -1; }
 .msg { white-space:pre-wrap; }
-#middle > .msg { margin-bottom:3px; }
+.truncated { max-height:50px; overflow:hidden; cursor:default; opacity:.4; font-size:90%; line-height:90%; }
+.truncated:hover { opacity:.8; }
+.truncated > * { pointer-events:none; }
+.truncated > .showless { display:none; }
+.showless { display:block; position:sticky; bottom:0; right:0; margin-left:auto; }
+#middle > .msg { margin-bottom:6px; }
 .msg img { max-height:20px; vertical-align:middle; }
 #join { width:100%; height:100%; }
 #commands { padding:3px; font-size:90%; }
 #commands > div { padding:3px; }
-.clickable { cursor:pointer; }
-#commands, #preview { max-height:100px; overflow:auto; }
+.clickable { cursor:default; }
+#commands, #preview { max-height:100px; overflow:auto; border-top:2px solid var(--color0); }
+#msgform { padding-top:1px; }
 #msg { display:block; width:100%; min-height:30px; max-height:200px; font-family:inherit; }
 #buttons { overflow-x:auto; }
 #buttons > input { height:100%; flex-shrink:0; }
@@ -179,17 +187,17 @@ label:has(.toggle:not(:checked)) ~ * { opacity:.5; }
 	<div id="commands" class="code"></div>
 	<div id="preview" class="msg"></div>
 	<form id="msgform" class="flex">
-		<textarea id="msg" class="stretch"></textarea>
+		<textarea id="msg" class="stretch" disabled></textarea>
 		<input type="submit" value="send" id="send" disabled>
 	</form>
 	<div id="buttons" class="flex">
-		<input type="color" id="colorpicker">
+		<input type="color" id="colorpicker" disabled>
 	</div>
 </div>
 <script src="/socket.io/socket.io.js"></script>
 <script>
 const here = decodeURI(window.location.search.slice(1)) || 'lobby';
-document.title = here+' | ankabuta pwa';
+const title = document.title = here+' | ankabuta pwa';
 const get = id => document.getElementById(id);
 onsubmit = e => e.preventDefault();
 let action = 'host';
@@ -283,7 +291,7 @@ const create = (text, type) => {
 	elem.className = type;
 	return elem;
 }
-const types = [['color', '##'], ['form', '[]'], ['big', '<>'], ['small', '><'], ['super', '^^'], ['sub', '~~'], ['bold', '**'], ['italic', '//'], ['code', '{}'], ['link', '__'], ['img', '::']];
+const types = [['color', '##'], ['big', '<>'], ['small', '><'], ['super', '^^'], ['sub', '~~'], ['bold', '**'], ['italic', '//'], ['code', '{}'], ['link', '__'], ['img', '::'], ['form', '[]']];
 const parse = text => {
 	for(let i = 0; i < text.length; i++) {
 		if(text[i] != '[') continue;
@@ -312,6 +320,7 @@ for(const [type, chars] of types) {
 	const button = document.createElement('input');
 	button.type = 'button';
 	button.value = button.id = button.className = type;
+	button.disabled = true;
 	get('buttons').append(button);
 	button.onclick = () => {
 		const start = get('msg').selectionStart;
@@ -475,6 +484,9 @@ socket.on('pic', text => {
 socket.on('error', error => console.warn(error));
 
 get('join').onclick = () => {
+	for(const elem of document.querySelectorAll('[disabled]')) {
+		elem.disabled = false;
+	}
 	if(action == 'join') {
 		socket.emit('join', islocked? prompt('password'): '');
 	} else {
@@ -484,7 +496,6 @@ get('join').onclick = () => {
 	onunload = () => socket.disconnect();
 	action = '';
 	get('join').remove();
-	get('send').disabled = false;
 	get('roomform').classList.add('hidden');
 
 	let say = msg => socket.emit('say', msg);
@@ -498,7 +509,7 @@ get('join').onclick = () => {
 		msgs.length = index+1;
 		get('msg').value = '';
 		get('msg').focus();
-		get('msg').onselectionchange();
+		get('msg').onselectionchange?.();
 	};
 	get('msg').onkeydown = e => {
 		if(e.key == 'Enter' && !e.shiftKey) {
@@ -548,7 +559,8 @@ get('join').onclick = () => {
 		}
 		get('msg').onselectionchange();
 	});
-
+	let interval;
+	let count = 0;
 	socket.on('addmsgs', (msgs, side) => {
 		for(const [msg, id] of msgs) {
 			if(id != undefined && get(side+id)) {
@@ -557,6 +569,21 @@ get('join').onclick = () => {
 				const div = document.createElement('div');
 				div.classList.add('msg');
 				div.append(...parse(msg));
+				if(msg.length > 200 || msg.split('\n').length > 10) {
+					const button = document.createElement('input');
+					button.classList.add('showless');
+					button.type = 'button';
+					button.value = 'show less';
+					button.onclick = e => {
+						e.stopPropagation();
+						div.classList.add('truncated');
+						div.onclick = () => {
+							div.classList.remove('truncated');
+							div.onclick = null;
+						}
+					}
+					div.append(button);
+				}
 				get(side).append(div);
 				div.scrollIntoView();
 				if(id != undefined) {
@@ -567,6 +594,22 @@ get('join').onclick = () => {
 				}
 			}
 		}
+		clearInterval(interval);
+		if(document.hasFocus()) return;
+		count++;
+		let bool = true;
+		const animate = () => {
+			document.title = (bool? '('+count+')': '!')+' '+title;
+			bool = !bool;
+		};
+		animate();
+		interval = setInterval(animate, 1000);
+		onfocus = onmousemove = () => {
+			clearInterval(interval);
+			document.title = title;
+			count = 0;
+			onfocus = onmousemove = null;
+		};
 	});
 	socket.on('removemsgs', (ids, side) => {
 		for(const id of ids) {
@@ -598,12 +641,6 @@ get('join').onclick = () => {
 		if(innerHeight > 600) {
 			get('roomsettings').open = true;
 		}
-		onkeydown = e => {
-			if(e.key == 's' && e.ctrltKey) {
-				e.preventDefault();
-				get('run').click();
-			}
-		};
 		get('code').value = `
 			const defaultnames = ['Maka', 'Lea', 'Kawena', 'Kekoa', 'Waiola', 'Hanalei', 'Kamalani', 'Malina', 'Kanakanui', 'Lilinoe', 'Momi', 'Waipuna', 'Makoa', 'Kalei', 'Loke', 'Ululani', 'Kona', 'Kamaile', 'Maluhia', 'Leinani', 'Kaleinani', 'Mana', 'Kapuni', 'Kealoha', 'Kiele', 'Kulamanu', 'Mokihana', 'Kapono', 'Maunakea', 'Pauahi', 'Kaliko', 'Lei', 'Keola', 'Hualani', 'Kamalu', 'Makana', 'Haunani', 'Kaulana', 'Keahi', 'Kalua', 'Luana', 'Kainalu', 'Makanui', 'Kaimana', 'Punahele', 'Kanoa', 'Alana', 'Maile', 'Melia', 'Mililani', 'Keawe', 'Makai', 'Kailani', 'Momilani', 'Hina', 'Hanohano', 'Kalama', 'Nohea', 'Kainoa', 'Lani', 'Kapulani', 'Uluwehi', 'Kaipo', 'Onaona', 'Koa', 'Kanani', 'Lokelani', 'Pumehana', 'Lehua', 'Kekona', 'Kaluhi', 'Nahenahe', 'Lana', 'Kaihe', 'Puamana', 'Noelani', 'Kawai', 'Leihua', 'Kapua', 'Nani', 'Kaila', 'Puna', 'Kanamu', 'Mamo', 'Keona', 'Wailani', 'Ikaika', 'Aloha', 'Akoni', 'Kawelo', 'Kiani', 'Kamaka', 'Nanea', 'Mahina', 'Kahiau', 'Hekili', 'Hiapo', 'Lono', 'Kaina', 'Pua', 'Kini', 'Kaleo', 'Makamae', 'Kalena', 'Ipo', 'Leilani', 'Kahula', 'Pali', 'Leimamo', 'Keao', 'Manuia', 'Lanakila', 'Palikapu', 'Hiwahiwa', 'Kilohana', 'Keilani', 'Anuhea', 'Kalani'];
 			function join(user, msg) {
@@ -718,7 +755,7 @@ get('join').onclick = () => {
 				socket.emit(...e.data);
 			};
 			worker.onerror = e => {
-				get('code').style.backgroundColor = '#f00';
+				get('code').classList.add('error');
 				codes.pop();
 				if(codes.length) {
 					run(codes.at(-1));
@@ -728,10 +765,18 @@ get('join').onclick = () => {
 			users.forEach((hash, id) => worker.postMessage(['join', id, hash]));
 		};
 		run(get('code').value);
+		get('code').oninput = () => {
+			get('code').classList.remove('error');
+		};
 		get('codeform').onsubmit = e => {
-			get('code').style.backgroundColor = null;
 			run(get('code').value);
 			get('code').focus();
+		};
+		onkeydown = e => {
+			if(e.key == 's' && e.ctrlKey) {
+				e.preventDefault();
+				run(get('code').value);
+			}
 		};
 		say = msg => {
 			console.log('0: '+msg);
@@ -900,7 +945,7 @@ socket.once('hi', async (rooms, key) => {
 			subscription = null;
 			subscribed = true;
 		}
-		channel.postMessage({ subscribed  });
+		channel.postMessage({ subscribed });
 		checkbox.disabled = false;
 	};
 	start.oninput = end.oninput = () => {
