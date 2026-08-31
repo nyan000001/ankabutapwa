@@ -8,11 +8,11 @@
 <title>ankabuta pwa</title>
 <link rel="icon" type="image/x-icon" href="favicon.ico">
 <style>
-:root { --color0:#ccc; --color1:#000;  --color2:#fff; --color3:#000;  --color4:#eee; --color5:#000; }
+:root { --color0:#ccc; --color1:#000;  --color2:#fff; --color3:#000;  --color4:#eee; --color5:#000;  --bg-color:transparent; --color:var(--color3); }
 :focus { outline:2px solid currentColor; outline-offset:-2px; }
 a:focus { text-decoration:none; outline-offset:0; }
 body { background:var(--color2); color:var(--color3); }
-#sidebar, #msgform, #buttons { background:var(--color0); color:var(--color1); }
+#sidebar, #scrolldown, #msgform, #buttons { background:var(--color0); color:var(--color1); }
 .edge, #commands, #status { background:var(--color4); color:var(--color5); }
 #status { border:2px solid var(--color5); position:fixed; }
 #status { pointer-events:none; bottom:2px; left:2px; }
@@ -31,9 +31,10 @@ dialog::backdrop { background-color:#00000099; }
 .hidden { display:none; }
 details { user-select:none; margin:2px; }
 summary { cursor:default; white-space:pre; font-weight:bold; }
-input, textarea { border:none; outline:1px solid color-mix(in srgb, currentColor 20%, transparent); outline-offset:-1px; }
+input, textarea, #scrolldown { border:none; outline:1px solid color-mix(in srgb, currentColor 20%, transparent); outline-offset:-1px; }
 textarea { resize:none; }
-#status, textarea, input:not([type="color"]), summary, #middle, .edge:not(:empty), #preview { padding:6px; }
+#status, textarea, input:not([type="color"]), summary { padding:6px; }
+#middle, .edge:not(:empty), #commands > div, #preview, .msg { padding:3px; }
 #dialog { margin:auto; text-align:center; padding:2px; }
 #images > img { min-width:30%; min-height:30%; max-width:calc(100% - 4px); object-fit:contain; vertical-align:middle; border:2px solid #000; padding:2px; margin:2px; }
 #dialog:not(:has(#login)) > #images:empty:before { content:'drop images here'; opacity:.5; font-style:italic; padding:30px; display:block; }
@@ -65,20 +66,22 @@ label:has(.toggle:not(:checked)) ~ * { opacity:.5; }
 
 #top, #bottom { text-align:center; }
 #top, #bottom, #commands, #preview, #msgform, #buttons { grid-column:2 / -1; }
-.msg { white-space:pre-wrap; }
-.truncated { max-height:50px; overflow:hidden; cursor:default; opacity:.4; font-size:90%; line-height:90%; }
+.msg { white-space:pre-wrap; background-color:var(--bg-color); }
+span { color:var(--color); }
+.truncated, #commands, #scrolldown > .msg { font-size:90%; }
+.truncated { max-height:50px; overflow:hidden; cursor:default; opacity:.4; line-height:90%; }
 .truncated:hover { opacity:.8; }
-.truncated > * { pointer-events:none; }
+.truncated > *, #scrolldown > .msg { pointer-events:none; }
 .truncated > .showless { display:none; }
 .showless { display:block; position:sticky; bottom:0; right:0; margin-left:auto; }
-#middle > .msg { margin-bottom:6px; }
+#middle { container-type:scroll-state; anchor-name:--anchor; }
 .msg img { max-height:20px; vertical-align:middle; }
 #join { width:100%; height:100%; }
-#commands { padding:3px; font-size:90%; }
-#commands > div { padding:3px; }
 .clickable { cursor:default; }
-#commands, #preview { max-height:100px; overflow:auto; border-top:2px solid var(--color0); }
-#msgform { padding-top:1px; }
+#scrolldown { display:none; text-align:center; position:fixed; position-anchor:--anchor; bottom:anchor(bottom); justify-self:anchor-center; min-width:calc(anchor-size(width) / 2); max-width:calc(anchor-size(width) - 6px); max-height:20px; margin:3px; overflow:hidden; background-color:ButtonFace; color:ButtonText; padding-top:5px; padding-bottom:20px; }
+#commands > div, #preview { max-height:50px; }
+#commands, #preview { border-top:2px solid var(--color0); }
+#msgform { padding-top:2px; }
 #msg { display:block; width:100%; min-height:30px; max-height:200px; font-family:inherit; }
 #buttons { overflow-x:auto; }
 #buttons > input { height:100%; flex-shrink:0; }
@@ -93,6 +96,10 @@ label:has(.toggle:not(:checked)) ~ * { opacity:.5; }
 .sub { vertical-align:sub; }
 .code { font-family:monospace; }
 .link { color:LinkText; text-decoration:underline; }
+
+@container scroll-state(scrollable: bottom) {
+	#scrolldown { display:block; }
+}
 
 @media (max-height:20rem) {
 	#roomsettings:not(.hidden) ~ details { display:none; }
@@ -181,6 +188,7 @@ label:has(.toggle:not(:checked)) ~ * { opacity:.5; }
 	<div id="left" class="edge scrollable"></div>
 	<main id="middle" class="scrollable">
 		<input type="button" value="loading..." id="join" disabled>
+		<div id="scrolldown" class="clickable">▼</div>
 	</main>
 	<div id="right" class="edge scrollable"></div>
 	<div id="bottom" class="edge flex"></div>
@@ -282,7 +290,7 @@ const create = (text, type) => {
 	} else if(type == 'color') {
 		elem = document.createElement('span');
 		const [color, ...rest] = text.split('#');
-		elem.style.color = '#'+color;
+		elem.style.setProperty('--color', '#'+color);
 		elem.append(...parse(rest.join('#')));
 	} else {
 		elem = document.createElement('span');
@@ -312,10 +320,28 @@ const parse = text => {
 	}
 	return [text];
 }
-const preview = () => {
-	get('preview').textContent = '';
-	get('preview').append(...parse(get('msg').value));
+let autoscroll = true;
+onresize = () => {
+	if(autoscroll) {
+		get('middle').scrollTop = get('middle').scrollHeight;
+	}
 }
+const preview = () => {
+	if(get('msg').value[0] == '/') {
+		get('msg').classList.add('code');
+	} else {
+		get('msg').classList.remove('code');
+	}
+	get('preview').replaceChildren(...parse(get('msg').value));
+	onresize();
+}
+get('middle').onpointerenter = () => autoscroll = false;
+get('middle').onpointerleave = () => autoscroll = true;
+get('scrolldown').onclick = () => {
+	get('middle').scrollTop = get('middle').scrollHeight;
+	get('scrolldown').replaceChildren('▼');
+	autoscroll = true;
+};
 for(const [type, chars] of types) {
 	const button = document.createElement('input');
 	button.type = 'button';
@@ -329,7 +355,7 @@ for(const [type, chars] of types) {
 		get('msg').focus();
 		const color = chars == '##'? get('colorpicker').value: '';
 		get('msg').value = text.slice(0, start) + '['+color+chars[0]+text.slice(start, end)+chars[1]+']' + text.slice(end);
-		get('msg').setSelectionRange(start+chars[0].length+1, end+chars[0].length+1);
+		get('msg').setSelectionRange(start+color.length+chars[0].length+1, end+color.length+chars[0].length+1);
 		get('msg').oninput();
 	};
 }
@@ -341,11 +367,6 @@ let index = 0;
 get('msg').oninput = () => {
 	msgs[index] = get('msg').value;
 	msgs.length = index+1;
-	if(get('msg').value[0] == '/') {
-		get('msg').classList.add('code');
-	} else {
-		get('msg').classList.remove('code');
-	}
 	preview();
 };
 
@@ -483,6 +504,39 @@ socket.on('pic', text => {
 
 socket.on('error', error => console.warn(error));
 
+socket.on('setcommands', commands => {
+	get('msg').onselectionchange = () => {
+		get('commands').textContent = '';
+		const msg = get('msg').value;
+		if(msg[0] != '/') return;
+		const msgwords = msg.slice(0, get('msg').selectionStart).split(' ');
+		const index = msgwords.length-1;
+		for(let i = 0; i < commands.length; i++) {
+			const cmd = commands[i];
+			if(!cmd.startsWith(msgwords[0])) return;
+			const cmdwords = cmd.split(' ');
+			const b = document.createElement('b');
+			b.textContent = cmdwords[index];
+			const div = document.createElement('div');
+			div.append(
+				cmdwords.slice(0, index).join(' ')+' ',
+				b,
+				' '+cmdwords.slice(index+1).join(' ')
+			);
+			get('commands').append(div);
+			if(!index) {
+				div.classList.add('clickable');
+				div.onclick = () => {
+					get('msg').value = cmdwords[0]+' ';
+					get('msg').focus();
+					get('msg').oninput();
+				};
+			}
+		}
+	}
+	get('msg').onselectionchange();
+});
+
 get('join').onclick = () => {
 	for(const elem of document.querySelectorAll('[disabled]')) {
 		elem.disabled = false;
@@ -500,7 +554,6 @@ get('join').onclick = () => {
 
 	let say = msg => socket.emit('say', msg);
 	get('msgform').onsubmit = e => {
-		get('preview').textContent = '';
 		const msg = get('msg').value;
 		if(!msg) return;
 		say(msg);
@@ -509,7 +562,7 @@ get('join').onclick = () => {
 		msgs.length = index+1;
 		get('msg').value = '';
 		get('msg').focus();
-		get('msg').onselectionchange?.();
+		preview();
 	};
 	get('msg').onkeydown = e => {
 		if(e.key == 'Enter' && !e.shiftKey) {
@@ -527,49 +580,27 @@ get('join').onclick = () => {
 		}
 	};
 
-	socket.on('setcommands', commands => {
-		get('msg').onselectionchange = () => {
-			get('commands').textContent = '';
-			const msg = get('msg').value;
-			if(msg[0] != '/') return;
-			const msgwords = msg.slice(0, get('msg').selectionStart).split(' ');
-			const index = msgwords.length-1;
-			for(let i = 0; i < commands.length; i++) {
-				const cmd = commands[i];
-				if(!cmd.startsWith(msgwords[0])) return;
-				const cmdwords = cmd.split(' ');
-				const b = document.createElement('b');
-				b.textContent = cmdwords[index];
-				const div = document.createElement('div');
-				div.append(
-					cmdwords.slice(0, index).join(' ')+' ',
-					b,
-					' '+cmdwords.slice(index+1).join(' ')
-				);
-				get('commands').append(div);
-				if(!index) {
-					div.classList.add('clickable');
-					div.onclick = () => {
-						get('msg').value = cmdwords[0]+' ';
-						get('msg').focus();
-						get('msg').oninput();
-					};
-				}
-			}
-		}
-		get('msg').onselectionchange();
-	});
+	let timeout;
 	let interval;
 	let count = 0;
 	socket.on('addmsgs', (msgs, side) => {
-		for(const [msg, id] of msgs) {
+		for(const [msg, id, color] of msgs) {
 			if(id != undefined && get(side+id)) {
 				get(side+id).textContent = msg;
 			} else {
 				const div = document.createElement('div');
 				div.classList.add('msg');
+				if(color) {
+					div.style.setProperty('--bg-color', color);
+				}
 				div.append(...parse(msg));
-				if(msg.length > 200 || msg.split('\n').length > 10) {
+				if(side == 'middle') {
+					get('scrolldown').replaceChildren(div.cloneNode(true));
+					clearTimeout(timeout);
+					timeout = setTimeout(() => get('scrolldown').replaceChildren('▼'), 3000);
+				}
+				get(side).append(div);
+				if(div.scrollHeight > innerHeight / 2) {
 					const button = document.createElement('input');
 					button.classList.add('showless');
 					button.type = 'button';
@@ -584,8 +615,9 @@ get('join').onclick = () => {
 					}
 					div.append(button);
 				}
-				get(side).append(div);
-				div.scrollIntoView();
+				if(autoscroll) {
+					div.scrollIntoView();
+				}
 				if(id != undefined) {
 					div.id = side+id;
 				}
@@ -618,7 +650,7 @@ get('join').onclick = () => {
 	});
 	socket.on('clear', sides => {
 		for(const side of sides) {
-			get(side).textContent = '';
+			document.querySelectorAll('#'+side+' > .msg').forEach(elem => elem.remove());
 		}
 	});
 
@@ -704,8 +736,8 @@ get('join').onclick = () => {
 					}
 				}
 				for(const side of ['top', 'right', 'bottom', 'left', 'middle', '']) {
-					User.prototype['send'+side] = Users.prototype['send'+side] = function (msg, msgid) {
-						this.post('send', [].concat(msg).map(msg => [].concat(msg, msgid ?? []).slice(0, 2)), side || 'middle');
+					User.prototype['send'+side] = Users.prototype['send'+side] = function (msg, msgid, color) {
+						this.post('send', [].concat(msg).map(msg => [].concat(msg, msgid ?? [], color ?? []).slice(0, 3)), side || 'middle');
 					}
 					User.prototype['unsend'+side] = Users.prototype['unsend'+side] = function (msgids) {
 						this.post('unsend', [].concat(msgids), side || 'middle');
@@ -798,9 +830,9 @@ get('join').onclick = () => {
 			users.set(id, hash);
 			worker.postMessage(['join', id, hash]);
 		});
-		socket.on('removeuser', id => {
+		socket.on('removeuser', (id, reason) => {
 			console.log(id+' has left');
-			worker.postMessage(['leave', id]);
+			worker.postMessage(['leave', id, reason]);
 			users.delete(id);
 		});
 		socket.on('online', id => worker.postMessage(['online', id]));
