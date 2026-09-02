@@ -584,46 +584,48 @@ get('join').onclick = () => {
 	let interval;
 	let count = 0;
 	socket.on('addmsgs', (msgs, side) => {
+		if(!audios.msg.muted && !document.hasFocus()) {
+			audios.msg.play();
+		}
 		for(const [msg, id, color] of msgs) {
+			let div;
 			if(id != undefined && get(side+id)) {
-				get(side+id).textContent = msg;
+				div = get(side+id);
+				div.replaceChildren(...parse(msg));
 			} else {
-				const div = document.createElement('div');
+				div = document.createElement('div');
 				div.classList.add('msg');
-				if(color) {
-					div.style.setProperty('--bg-color', color);
-				}
 				div.append(...parse(msg));
-				if(side == 'middle') {
-					get('scrolldown').replaceChildren(div.cloneNode(true));
-					clearTimeout(timeout);
-					timeout = setTimeout(() => get('scrolldown').replaceChildren('▼'), 3000);
-				}
 				get(side).append(div);
-				if(div.scrollHeight > innerHeight / 2) {
-					const button = document.createElement('input');
-					button.classList.add('showless');
-					button.type = 'button';
-					button.value = 'show less';
-					button.onclick = e => {
-						e.stopPropagation();
-						div.classList.add('truncated');
-						div.onclick = () => {
-							div.classList.remove('truncated');
-							div.onclick = null;
-						}
-					}
-					div.append(button);
-				}
 				if(autoscroll) {
 					div.scrollIntoView();
 				}
 				if(id != undefined) {
 					div.id = side+id;
 				}
-				if(!audios.msg.muted) {
-					audios.msg.play();
+				if(side == 'middle') {
+					get('scrolldown').replaceChildren(div.cloneNode(true));
+					clearTimeout(timeout);
+					timeout = setTimeout(() => get('scrolldown').replaceChildren('▼'), 3000);
 				}
+			}
+			if(color) {
+				div.style.setProperty('--bg-color', color);
+			}
+			if(div.scrollHeight > innerHeight / 2) {
+				const button = document.createElement('input');
+				button.classList.add('showless');
+				button.type = 'button';
+				button.value = 'show less';
+				button.onclick = e => {
+					e.stopPropagation();
+					div.classList.add('truncated');
+					div.onclick = () => {
+						div.classList.remove('truncated');
+						div.onclick = null;
+					}
+				}
+				div.append(button);
 			}
 		}
 		clearInterval(interval);
@@ -675,24 +677,24 @@ get('join').onclick = () => {
 		}
 		get('code').value = `
 			const defaultnames = ['Maka', 'Lea', 'Kawena', 'Kekoa', 'Waiola', 'Hanalei', 'Kamalani', 'Malina', 'Kanakanui', 'Lilinoe', 'Momi', 'Waipuna', 'Makoa', 'Kalei', 'Loke', 'Ululani', 'Kona', 'Kamaile', 'Maluhia', 'Leinani', 'Kaleinani', 'Mana', 'Kapuni', 'Kealoha', 'Kiele', 'Kulamanu', 'Mokihana', 'Kapono', 'Maunakea', 'Pauahi', 'Kaliko', 'Lei', 'Keola', 'Hualani', 'Kamalu', 'Makana', 'Haunani', 'Kaulana', 'Keahi', 'Kalua', 'Luana', 'Kainalu', 'Makanui', 'Kaimana', 'Punahele', 'Kanoa', 'Alana', 'Maile', 'Melia', 'Mililani', 'Keawe', 'Makai', 'Kailani', 'Momilani', 'Hina', 'Hanohano', 'Kalama', 'Nohea', 'Kainoa', 'Lani', 'Kapulani', 'Uluwehi', 'Kaipo', 'Onaona', 'Koa', 'Kanani', 'Lokelani', 'Pumehana', 'Lehua', 'Kekona', 'Kaluhi', 'Nahenahe', 'Lana', 'Kaihe', 'Puamana', 'Noelani', 'Kawai', 'Leihua', 'Kapua', 'Nani', 'Kaila', 'Puna', 'Kanamu', 'Mamo', 'Keona', 'Wailani', 'Ikaika', 'Aloha', 'Akoni', 'Kawelo', 'Kiani', 'Kamaka', 'Nanea', 'Mahina', 'Kahiau', 'Hekili', 'Hiapo', 'Lono', 'Kaina', 'Pua', 'Kini', 'Kaleo', 'Makamae', 'Kalena', 'Ipo', 'Leilani', 'Kahula', 'Pali', 'Leimamo', 'Keao', 'Manuia', 'Lanakila', 'Palikapu', 'Hiwahiwa', 'Kilohana', 'Keilani', 'Anuhea', 'Kalani'];
-			function join(user, msg) {
+			onjoin = user => {
 				user.name = user.defaultname = defaultnames.shift();
 				users.sendright(users.map(user => [user.id+' '+user.name, user.id]));
 				users.send(user.name+' has joined');
 				user.setcommands(['/nick NAME']);
-			}
-			function leave(user, reason) {
+			};
+			onleave = (user, reason) => {
 				defaultnames.push(user.defaultname);
 				users.unsendright(user.id);
 				users.send(user.name+' has left ('+reason+')');
-			}
-			function online(user) {
+			};
+			online = user => {
 				users.sendright(user.id+' '+user.name, user.id);
-			}
-			function offline(user) {
+			};
+			offline = user => {
 				users.sendright(user.id+' ('+user.name+')', user.id);
-			}
-			function hear(user, cmd, msg) {
+			};
+			onhear = (user, cmd, msg) => {
 				if(cmd) {
 					if(['nick', 'name', 'n'].includes(cmd)) {
 						users.send(user.name+' is now known as '+msg);
@@ -756,28 +758,28 @@ get('join').onclick = () => {
 					this.post('setcolors', colors);
 				}
 				const users = new Users();
-				${ code }
-				onmessage = e => {
-					const [action, id, data] = e.data;
+				${ code };
+				onmessage = ({ data }) => {
+					const event = data.shift();
+					const id = data.shift();
 					let user = users.get(id);
-					if(action == 'join') {
+					if(event == 'onjoin') {
 						user = new User(id, data);
-						users.push(user);
-						this.join?.(user, data);
+						this.onjoin?.(user);
 					} else if(!user) {
-						throw Error(action+' failed: '+id+' not found');
-					} else if(action == 'leave') {
+						throw Error(event+' failed: '+id+' not found');
+					} else if(event == 'onleave') {
 						users.splice(users.findIndex(user => user.id == id), 1);
-						this.leave?.(user, data);
-					} else if(action == 'hear') {
+						this.onleave?.(user, data);
+					} else if(event == 'onhear') {
 						let cmd = '';
 						let msg = data;
 						if(data[0] == '/') {
 							[cmd, msg = ''] = data.slice(1).split(/ (.*)/);
 						}
-						this.hear?.(user, cmd, msg);
+						this.onhear?.(user, cmd, msg);
 					} else {
-						this[action]?.(user);
+						this[event]?.(user);
 					}
 				}`.slice(1).replace(/^\t{4}/gm, '')
 			]);
@@ -812,7 +814,7 @@ get('join').onclick = () => {
 		};
 		say = msg => {
 			console.log('0: '+msg);
-			worker.postMessage(['hear', 0, msg]);
+			worker.postMessage(['onhear', 0, msg]);
 		};
 		const inputs = [...document.querySelectorAll('#colors > input[type="color"]')];
 		get('colorform').onsubmit = e => {
@@ -823,16 +825,16 @@ get('join').onclick = () => {
 		};
 		socket.on('hear', (id, msg) => {
 			console.log(id+': '+msg);
-			worker.postMessage(['hear', id, msg]);
+			worker.postMessage(['onhear', id, msg]);
 		});
 		socket.on('adduser', (id, hash) => {
 			console.log(id+' has joined');
 			users.set(id, hash);
-			worker.postMessage(['join', id, hash]);
+			worker.postMessage(['onjoin', id, hash]);
 		});
 		socket.on('removeuser', (id, reason) => {
 			console.log(id+' has left');
-			worker.postMessage(['leave', id, reason]);
+			worker.postMessage(['onleave', id, reason]);
 			users.delete(id);
 		});
 		socket.on('online', id => worker.postMessage(['online', id]));
