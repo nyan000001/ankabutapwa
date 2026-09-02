@@ -30,9 +30,11 @@ const io = require('socket.io')(server, { connectionStateRecovery:{ maxDisconnec
 const defaultcolors = ['#ccc', '#000', '#fff', '#000', '#eee', '#000'];
 const rooms = new Map([
 	['lobby', {
-		users:new Map(), password:'', colors:defaultcolors, emit:function (action, userid, ...args) {
+		users:new Map(), password:'', colors:defaultcolors, msgs:[], emit:function (action, userid, ...args) {
 			if(action == 'adduser') {
 				io.to('?lobby').emit('addmsgs', [...this.users.keys()].map(userid2 => [userid2.toString(), userid2.toString()]), 'right');
+				const limit = Date.now() - 30000000;
+				io.to('?lobby').emit('addmsgs', this.msgs.filter((msg, time) => time < limit).map(msg => msg), 'middle');
 			} else if(action == 'removeuser') {
 				io.to('?lobby').emit('removemsgs', [[userid]], 'right');
 			} else if(action == 'online') {
@@ -57,7 +59,12 @@ const rooms = new Map([
 						error('invalid command');
 					}
 				} else {
-					io.to('?lobby').emit('addmsgs', [['[*'+userid+'*]: '+args[0]]], 'middle');
+					const msg = '[*'+userid+'*]: '+args[0];
+					io.to('?lobby').emit('addmsgs', [[msg]], 'middle');
+					this.msgs.push([msg, Date.now()]);
+					if(this.msgs.length > 10) {
+						this.msgs.shfit();
+					}
 				}
 			}
 		}
@@ -121,7 +128,7 @@ io.on('connection', socket => {
 		}
 		return user;
 	}
-	if(!socket.recovered) {
+	socket.once('start', () => {
 		socket.emit('hi', [...rooms].map(([roomname, room]) =>
 			[roomname, { count:room.users.size, colors:room.colors, locked:Boolean(room.password) }]
 		), process.env.PUBLIC_KEY);
@@ -134,7 +141,7 @@ io.on('connection', socket => {
 			hashes.set(ip, hash);
 		}
 		socket.data.hash = hash;
-	}
+	});
 	if(socket.data.userid == undefined) {
 		socket.on('join', password => {
 			room = rooms.get(roomname);
