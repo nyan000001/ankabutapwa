@@ -408,6 +408,9 @@ for(const [id, url] of [['room', 'https://cdn.pixabay.com/audio/2022/03/10/audio
 	button.onclick = () => audios[id].play();
 }
 const socket = io();
+socket.once('connect', () => {
+	socket.emit('start');
+});
 socket.on('connect', () => {
 	get('status').value = '';
 	if(action) {
@@ -638,11 +641,12 @@ get('join').onclick = () => {
 		};
 		animate();
 		interval = setInterval(animate, 1000);
-		onfocus = onmousemove = () => {
+		onfocus = onmousemove = onvisibilitychange = () => {
+			if(document.hidden) return;
 			clearInterval(interval);
 			document.title = title;
 			count = 0;
-			onfocus = onmousemove = null;
+			onfocus = onmousemove = onvisibilitychange = null;
 		};
 	});
 	socket.on('removemsgs', (ids, side) => {
@@ -765,6 +769,7 @@ get('join').onclick = () => {
 					let user = users.get(id);
 					if(event == 'onjoin') {
 						user = new User(id, data);
+						users.push(user);
 						this.onjoin?.(user);
 					} else if(!user) {
 						throw Error(event+' failed: '+id+' not found');
@@ -796,7 +801,7 @@ get('join').onclick = () => {
 				}
 			};
 			socket.emit('clear', [...users.keys()], ['top', 'right', 'bottom', 'left', 'middle']);
-			users.forEach((hash, id) => worker.postMessage(['join', id, hash]));
+			users.forEach((hash, id) => worker.postMessage(['onjoin', id, hash]));
 		};
 		run(get('code').value);
 		get('code').oninput = () => {
