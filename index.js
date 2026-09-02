@@ -128,7 +128,7 @@ io.on('connection', socket => {
 		}
 		return user;
 	}
-	socket.once('start', () => {
+	if(!socket.recovered) {
 		socket.emit('hi', [...rooms].map(([roomname, room]) =>
 			[roomname, { count:room.users.size, colors:room.colors, locked:Boolean(room.password) }]
 		), process.env.PUBLIC_KEY);
@@ -141,7 +141,7 @@ io.on('connection', socket => {
 			hashes.set(ip, hash);
 		}
 		socket.data.hash = hash;
-	});
+	}
 	if(socket.data.userid == undefined) {
 		socket.on('join', password => {
 			room = rooms.get(roomname);
