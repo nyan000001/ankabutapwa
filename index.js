@@ -273,12 +273,12 @@ io.on('connection', socket => {
 			io.emit('setlock', roomname, Boolean(password));
 		});
 	}
-	socket.on('pic', arrayBuffers => {
+	socket.on('upload', arrayBuffers => {
 		if(!socket.data.admin) {
 			socket.emit('error', 'log in to send images');
 			return;
 		}
-		const images = [];
+		const filenames = [];
 		for(const arrayBuffer of arrayBuffers) {
 			buffer = Buffer.from(arrayBuffer);
 			const extension =
@@ -288,14 +288,23 @@ io.on('connection', socket => {
 				buffer.subarray(0, 4).equals(Buffer.from('RIFF')) && buffer.subarray(8, 12).equals(Buffer.from('WEBP')) ? 'webp' :
 				null;
 			if(!extension) return;
-			const name = crypto.createHash('sha256').update(buffer).digest('hex')+'.'+extension;
-			const path = __dirname+'/public/uploads/'+name;
+			const filename = crypto.createHash('sha256').update(buffer).digest('hex')+'.'+extension;
+			const path = __dirname+'/public/uploads/'+filename;
 			fs.writeFile(path, buffer, () => {
 				setTimeout(() => fs.rm(path, { force:true }, () => {}), 24*60*60*1000);
 			});
-			images.push('[:'+name+':]');
+			filenames.push(filename);
 		}
-		socket.emit('pic', images.join(''));
+		socket.emit('getfilenames', filenames);
+	});
+	socket.on('remove', filename => {
+		fs.rm(__dirname+'/public/uploads/'+filename, { force:true }, error => {
+			if(error) {
+				socket.emit('error', error);
+			} else {
+				socket.emit('remove', filename);
+			}
+		});
 	});
 	socket.on('subscribe', (sub, start, end, time) => {
 		const diff = Date.now()-time;
