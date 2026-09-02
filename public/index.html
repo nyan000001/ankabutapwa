@@ -75,12 +75,12 @@ span { color:var(--color); }
 .truncated > .showless { display:none; }
 .showless { display:block; position:sticky; bottom:0; right:0; margin-left:auto; }
 #middle { container-type:scroll-state; anchor-name:--anchor; }
-.msg img { max-height:20px; vertical-align:middle; }
+.msg img { max-height:calc(60em - 730px); vertical-align:middle; }
 #join { width:100%; height:100%; }
 .clickable { cursor:default; }
 #scrolldown { display:none; text-align:center; position:fixed; position-anchor:--anchor; bottom:anchor(bottom); justify-self:anchor-center; min-width:calc(anchor-size(width) / 2); max-width:calc(anchor-size(width) - 6px); max-height:20px; margin:3px; overflow:hidden; background-color:ButtonFace; color:ButtonText; padding-top:5px; padding-bottom:20px; }
 #commands > div, #preview { max-height:50px; }
-#commands, #preview { border-top:2px solid var(--color0); }
+#commands, #preview { border-top:2px solid var(--color0); overflow:hidden; }
 #msgform { padding-top:2px; }
 #msg { display:block; width:100%; min-height:30px; max-height:200px; font-family:inherit; }
 #buttons { overflow-x:auto; }
@@ -320,9 +320,8 @@ const parse = text => {
 	}
 	return [text];
 }
-let autoscroll = true;
 onresize = () => {
-	if(autoscroll) {
+	if(!getSelection().toString()) {
 		get('middle').scrollTop = get('middle').scrollHeight;
 	}
 }
@@ -333,14 +332,10 @@ const preview = () => {
 		get('msg').classList.remove('code');
 	}
 	get('preview').replaceChildren(...parse(get('msg').value));
-	onresize();
 }
-get('middle').onpointerenter = () => autoscroll = false;
-get('middle').onpointerleave = () => autoscroll = true;
 get('scrolldown').onclick = () => {
 	get('middle').scrollTop = get('middle').scrollHeight;
 	get('scrolldown').replaceChildren('▼');
-	autoscroll = true;
 };
 for(const [type, chars] of types) {
 	const button = document.createElement('input');
@@ -600,7 +595,7 @@ get('join').onclick = () => {
 				div.classList.add('msg');
 				div.append(...parse(msg));
 				get(side).append(div);
-				if(autoscroll) {
+				if(!getSelection().toString()) {
 					div.scrollIntoView();
 				}
 				if(id != undefined) {
@@ -881,6 +876,7 @@ get('join').onclick = () => {
 	});
 }
 socket.once('hi', async (rooms, key) => {
+	socket.once('hi', () => socket.disconnect());
 	rooms = new Map(rooms);
 	const setcolors = (name, colors) => {
 		const a = rooms.get(name);
