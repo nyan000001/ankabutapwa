@@ -57,7 +57,7 @@ textarea { resize:none; }
 .lock { width:100%; }
 #sidebar > details > div > label { word-break:break-all; }
 #personalsettings > div { margin:0 0 3px 0; }
-label:has(.toggle:not(:checked)) ~ * { opacity:.5; }
+label:has(.toggle:not(:checked)) ~ *, .deleted { opacity:.5; }
 .volume { height:10px; z-index:10000; }
 #colors { grid-template-rows:repeat(3, auto); grid-auto-flow:column; }
 #colors > input { width:100%; }
@@ -116,8 +116,8 @@ span { color:var(--color); }
 	</form>
 	<div id="images"></div>
 	<div id="controls" class="flex">
-		<input type="button" id="cancel" value="cancel">
-		<input type="button" id="share" value="upload">
+		<input type="button" id="cancel" value="cancel" disabled>
+		<input type="button" id="share" value="upload" disabled>
 	</div>
 </dialog>
 <output id="status"></output>
@@ -403,9 +403,6 @@ for(const [id, url] of [['room', 'https://cdn.pixabay.com/audio/2022/03/10/audio
 	button.onclick = () => audios[id].play();
 }
 const socket = io();
-socket.once('connect', () => {
-	socket.emit('start');
-});
 socket.on('connect', () => {
 	get('status').value = '';
 	if(action) {
@@ -451,7 +448,18 @@ const showfiles = files => {
 		};
 	}
 };
+const filenames = new Set();
 get('upload').onclick = () => {
+	filenames.forEach(filename => {
+		const img = new Image();
+		img.src = '/uploads/'+filename;
+		get('images').append(img);
+		img.id = filename;
+		img.onclick = () => {
+			socket.emit('remove', filename);
+			img.classList.add('deleted');
+		};
+	});
 	get('dialog').showModal();
 	get('login')?.focus();
 	ondragover = e => {
@@ -461,11 +469,11 @@ get('upload').onclick = () => {
 	ondrop = e => {
 		if(!e.dataTransfer.types.includes('Files')) return;
 		e.preventDefault();
-		get('dialog').style.pointerEvents = 'auto';
 		showfiles(e.dataTransfer.files);
 	};
 	get('dialog').onclick = e => {
 		if(e.target == get('dialog')) {
+			get('cancel').onclick();
 			get('dialog').close();
 		}
 	};
@@ -475,6 +483,7 @@ get('loginform').onsubmit = () => {
 };
 socket.once('login', () => {
 	get('loginform').remove();
+	get('cancel').disabled = get('share').disabled = false;
 });
 let timeout;
 get('cancel').onclick = () => {
@@ -490,14 +499,19 @@ get('share').onclick = () => {
 	get('share').value = 'uploading...';
 	get('share').disabled = true;
 	timeout = setTimeout(() => {
-		socket.emit('pic', buffers);
+		socket.emit('upload', buffers);
 		get('cancel').onclick();
 	}, 5000);
 };
-socket.on('pic', text => {
-	get('msg').value += text;
+socket.on('getfilenames', newfilenames => {
+	newfilenames.forEach(filename => filenames.add(filename));
+	get('msg').value += newfilenames.map(filename => '[:'+filename+':]').join('\n');
 	get('msg').focus();
 	get('msg').oninput();
+});
+socket.on('remove', filename => {
+	filenames.delete(filename);
+	get(filename)?.remove();
 });
 
 socket.on('error', error => console.warn(error));
@@ -536,7 +550,7 @@ socket.on('setcommands', commands => {
 });
 
 get('join').onclick = () => {
-	for(const elem of document.querySelectorAll('[disabled]')) {
+	for(const elem of document.querySelectorAll('#msgform [disabled], #buttons [disabled]')) {
 		elem.disabled = false;
 	}
 	if(action == 'join') {
