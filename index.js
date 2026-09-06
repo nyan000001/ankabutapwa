@@ -69,7 +69,7 @@ const rooms = new Map([
 			}
 		}
 	}], ['questions', {
-		users:new Map(), password:'', colors:defaultcolors, questions:[['what did you do today?'], ['what are you reading?'], ['share a song'], ['what do you want to learn?']], emit:function (action, userid, ...args) {
+		users:new Map(), password:'', colors:['#f947a2', '#ffffff', '#ffdd00', '#000000', '#2da1cb', '#ffffff'], questions:[['what did you do today?'], ['what are you reading?'], ['share a song'], ['what do you want to learn?']], emit:function (action, userid, ...args) {
 			const user = this.users.get(userid);
 			const ask = index => {
 				if(user.data.index != undefined) {
@@ -77,10 +77,11 @@ const rooms = new Map([
 					user.leave('?'+user.data.index);
 				}
 				user.data.index = index < 0? this.questions.length - 1: index % this.questions.length;
-				user.emit('addmsgs', [[this.questions[user.data.index][0]]], 'top');
+				user.emit('addmsgs', [[this.questions[user.data.index][0], 'question']], 'top');
 			}
 			if(action == 'adduser') {
 				ask(Math.random()*this.questions.length|0);
+				user.emit('setcommands', ['/previous', '/next', '/ask']);
 			} else if(action == 'hear') {
 				let msg = args[0];
 				if(msg.startsWith('/')) {
@@ -92,8 +93,8 @@ const rooms = new Map([
 					} else if(cmd == '/ask') {
 						const question = args.join(' ');
 						user.data.index = this.questions.length;
-						questions[user.data.index] = [user.data.question];
-						user.emit('addmsgs', [[question]], 'top');
+						this.questions[user.data.index] = [user.data.question];
+						user.emit('addmsgs', [[question, 'question']], 'top');
 						user.join('?'+user.data.index);
 					} else {
 						user.emit('addmsgs', [['invalid command']], 'middle');
