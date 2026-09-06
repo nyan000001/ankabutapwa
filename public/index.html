@@ -301,6 +301,7 @@ const create = (text, type) => {
 }
 const types = [['color', '##'], ['big', '<>'], ['small', '><'], ['super', '^^'], ['sub', '~~'], ['bold', '**'], ['italic', '//'], ['code', '{}'], ['link', '__'], ['img', '::'], ['form', '[]']];
 const parse = text => {
+	if(!text) return '';
 	for(let i = 0; i < text.length; i++) {
 		if(text[i] != '[') continue;
 		const match = types.find(arr => arr[1][0] == text[i+1]);
@@ -538,8 +539,9 @@ socket.on('setcommands', commands => {
 			get('commands').append(div);
 			if(!index) {
 				div.classList.add('clickable');
+				const space = cmdwords.length > 1? ' ': '';
 				div.onclick = () => {
-					get('msg').value = cmdwords[0]+' ';
+					get('msg').value = cmdwords[0]+space;
 					get('msg').focus();
 					get('msg').oninput();
 				};
