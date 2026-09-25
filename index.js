@@ -72,7 +72,7 @@ const rooms = new Map([
 					io.to('?lobby').emit('addmsgs', [[msg]], 'middle');
 					this.msgs.push([msg, Date.now()]);
 					if(this.msgs.length > 10) {
-						this.msgs.shfit();
+						this.msgs.shift();
 					}
 				}
 			}
