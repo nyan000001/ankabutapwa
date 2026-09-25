@@ -67,7 +67,7 @@ label:has(.toggle:not(:checked)) ~ *, .deleted { opacity:.5; }
 #top, #bottom { text-align:center; }
 #top, #bottom, #commands, #preview, #msgform, #buttons { grid-column:2 / -1; }
 .msg { white-space:pre-wrap; background-color:var(--bg-color); }
-span { color:var(--color); }
+.color { color:var(--color); }
 .truncated, #commands, #scrolldown > .msg { font-size:90%; }
 .truncated { max-height:50px; overflow:hidden; cursor:default; opacity:.4; line-height:90%; }
 .truncated:hover { opacity:.8; }
@@ -289,6 +289,7 @@ const create = (text, type) => {
 		elem.textContent = text;
 	} else if(type == 'color') {
 		elem = document.createElement('span');
+		elem.classList.add('color');
 		const [color, ...rest] = text.split('#');
 		elem.style.setProperty('--color', '#'+color);
 		elem.append(...parse(rest.join('#')));
@@ -561,7 +562,7 @@ get('join').onclick = () => {
 		socket.emit('host');
 	}
 	onbeforeunload = () => true;
-	onunload = () => socket.disconnect();
+	onpagehide = () => socket.disconnect();
 	action = '';
 	get('join').remove();
 	get('roomform').classList.add('hidden');
