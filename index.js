@@ -31,10 +31,11 @@ const defaultcolors = ['#ccc', '#000', '#fff', '#000', '#eee', '#000'];
 const rooms = new Map([
 	['lobby', {
 		users:new Map(), password:'', colors:defaultcolors, msgs:[], emit:function (action, userid, ...args) {
+			const user = this.users.get(userid);
 			if(action == 'adduser') {
 				io.to('?lobby').emit('addmsgs', [...this.users.keys()].map(userid2 => [userid2.toString(), userid2.toString()]), 'right');
 				const limit = Date.now() - 30000000;
-				io.to('?lobby').emit('addmsgs', this.msgs.filter((msg, time) => time < limit).map(msg => msg), 'middle');
+				user.emit('addmsgs', this.msgs.filter((msg, time) => time < limit).map(msg => msg), 'middle');
 			} else if(action == 'removeuser') {
 				io.to('?lobby').emit('removemsgs', [[userid]], 'right');
 			} else if(action == 'online') {
@@ -42,7 +43,6 @@ const rooms = new Map([
 			} else if(action == 'offline') {
 				io.to('?lobby').emit('addmsgs', [['('+userid+')', userid]], 'right');
 			} else if(action == 'hear') {
-				const user = this.users.get(userid);
 				const error = msg => user.emit('addmsgs', [[msg]], 'middle');
 				const msg = args[0];
 				if(msg.startsWith('/')) {
@@ -54,6 +54,15 @@ const rooms = new Map([
 							}
 						} else {
 							error('only admins can kick');
+						}
+					} else if(cmd == '/pm') {
+						const user2 = this.users.get(parseInt(args[0]));
+						if(user2) {
+							const msg = '[/[*'+userid+' > '+args[0]+'*]: '+args[1]+'/]';
+							user.emit('addmsgs', [['[/[*(to '+args[0]+') '+userid+'*]: '+args[1]+'/]']], 'middle');
+							user2.emit('addmsgs', [['[/[*(to you) '+userid+'*]: '+args[1]+'/]']], 'middle');
+						} else {
+							error('no such user');
 						}
 					} else {
 						error('invalid command');
