@@ -4,7 +4,6 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
 <meta name="description" content="Create a chatroom with your own code or join other people's rooms">
-</head>
 <title>ankabuta pwa</title>
 <link rel="icon" type="image/x-icon" href="favicon.ico">
 <style>
@@ -36,17 +35,17 @@ textarea { resize:none; }
 #status, textarea, input:not([type="color"]), summary { padding:6px; }
 #middle, .edge:not(:empty), #commands > div, #preview, .msg { padding:3px; }
 #dialog { margin:auto; text-align:center; padding:2px; }
-#images > img { min-width:30%; min-height:30%; max-width:calc(100% - 4px); object-fit:contain; vertical-align:middle; border:2px solid #000; padding:2px; margin:2px; }
-#dialog:not(:has(#login)) > #images:empty:before { content:'drop images here'; opacity:.5; font-style:italic; padding:30px; display:block; }
-#images:empty ~ #controls { display:none; }
-#controls { justify-content:space-between; margin:2px; }
+#cancel { display:block; margin:auto; }
+#dialog img { height:30px; }
+#dialog:not(:has(#login)) > #newimages:empty:before { content:'drop images here'; opacity:.5; font-style:italic; padding:30px; display:block; }
+#loginform ~ #share, #loginform ~ #upload, #oldimages:empty ~ #share, #newimages:empty ~ #upload { display:none; }
 #wrapper { grid-template-rows:auto 1fr auto auto auto auto auto; grid-template-columns:auto auto 1fr auto; }
 
 #burger { position:fixed; top:2px; left:2px; }
 #sidebar { grid-row:1 / -1; overflow-x:hidden; resize:horizontal; width:25vw; }
-#code, #style textarea { white-space:pre; scroll-padding:3px; }
+#codebox, #style textarea { white-space:pre; scroll-padding:3px; }
 .error { outline-color:#f00; }
-#style textarea, #msg { field-sizing:content; }
+#style textarea, #msgbox { field-sizing:content; }
 #roomlist { display:table; width:100%; border-spacing:0 2px; }
 #roomlist > a { display:table-row; text-decoration:none; white-space:nowrap; }
 #roomlist > a > * { display:table-cell; padding:4px; }
@@ -62,7 +61,7 @@ label:has(.toggle:not(:checked)) ~ *, .deleted { opacity:.5; }
 #colors { grid-template-rows:repeat(3, auto); grid-auto-flow:column; }
 #colors > input { width:100%; }
 #colors > output { text-align:center; }
-#upload { display:block; margin:auto; }
+#admin { display:block; margin:auto; }
 
 #top, #bottom { text-align:center; }
 #top, #bottom, #commands, #preview, #msgform, #buttons { grid-column:2 / -1; }
@@ -82,7 +81,7 @@ label:has(.toggle:not(:checked)) ~ *, .deleted { opacity:.5; }
 #commands > div, #preview { max-height:50px; }
 #commands, #preview { border-top:2px solid var(--color0); overflow:hidden; }
 #msgform { padding-top:2px; }
-#msg { display:block; width:100%; min-height:30px; max-height:200px; font-family:inherit; }
+#msgbox { display:block; width:100%; min-height:30px; max-height:200px; font-family:inherit; }
 #buttons { overflow-x:auto; }
 #buttons > input { height:100%; flex-shrink:0; }
 
@@ -114,11 +113,11 @@ label:has(.toggle:not(:checked)) ~ *, .deleted { opacity:.5; }
 		<input id="login" spellcheck="false" placeholder="password" class="stretch">
 		<input type="submit" value="log in">
 	</form>
-	<div id="images"></div>
-	<div id="controls" class="flex">
-		<input type="button" id="cancel" value="cancel" disabled>
-		<input type="button" id="share" value="upload" disabled>
-	</div>
+	<div id="oldimages" class="flex"></div>
+	<input type="button" id="share" value="share">
+	<div id="newimages" class="flex"></div>
+	<input type="button" id="upload" value="upload">
+	<input type="button" id="cancel" value="cancel">
 </dialog>
 <output id="status"></output>
 <input type="button" id="burger" value="☰" class="hidden">
@@ -126,7 +125,7 @@ label:has(.toggle:not(:checked)) ~ *, .deleted { opacity:.5; }
 	<div id="sidebar" class="flex down scrollable">
 		<iframe id="video" class="hidden" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 		<form id="codeform" class="hidden flex down stretch">
-			<textarea id="code" spellcheck="false" class="stretch small"></textarea>
+			<textarea id="codebox" spellcheck="false" class="stretch small"></textarea>
 			<input type="submit" value="run">
 		</form>
 		<details id="roomsettings" class="hidden">
@@ -181,7 +180,7 @@ label:has(.toggle:not(:checked)) ~ *, .deleted { opacity:.5; }
 				<input type="time" value="10:00">
 				<input type="time" value="22:00">
 			</div>
-			<input type="button" id="upload" value="upload">
+			<input type="button" id="admin" value="upload">
 		</details>
 	</div>
 	<div id="top" class="edge flex"></div>
@@ -195,7 +194,7 @@ label:has(.toggle:not(:checked)) ~ *, .deleted { opacity:.5; }
 	<div id="commands" class="code"></div>
 	<div id="preview" class="msg"></div>
 	<form id="msgform" class="flex">
-		<textarea id="msg" class="stretch" disabled></textarea>
+		<textarea id="msgbox" class="stretch" disabled></textarea>
 		<input type="submit" value="send" id="send" disabled>
 	</form>
 	<div id="buttons" class="flex">
@@ -204,6 +203,10 @@ label:has(.toggle:not(:checked)) ~ *, .deleted { opacity:.5; }
 </div>
 <script src="/socket.io/socket.io.js"></script>
 <script>
+const socket = io();
+socket.on('error', error => console.warn(error));
+let say = msg => socket.emit('say', msg);
+
 const here = decodeURI(window.location.search.slice(1)) || 'lobby';
 const title = document.title = here+' | ankabuta pwa';
 const get = id => document.getElementById(id);
@@ -262,24 +265,28 @@ const create = (text, type) => {
 			elem.append(input);
 		}
 		elem.onsubmit = e => {
-			say('/'+e.submitter.value+' '+inputs.map(input => input.value.replaceAll(' ', '\u00A0').join(' ')));
+			say('/'+e.submitter.value+' '+inputs.map(input => input.value.replaceAll(' ', '\u00A0')).join(' '));
 		}
 	} else if(type == 'img') {
 		elem = document.createElement('img');
-		elem.src = text.startsWith('http')? text: '/uploads/'+text;
-	} else if(type == 'link') {
+		if(/^https?:\/\//.test(text)) {
+			elem.src = text;
+		} else {
+			elem.classList.add('img'+text.match(/\/(.*)\./)?.[1]);
+			elem.src = '/uploads/'+text;
+		}
+	} else if(type == 'link' && /^https?:\/\//.test(text)) {
 		elem = document.createElement('a');
 		const id = text.match(/(?<=^|\.be\/|\/v\/|\?v=|\/embed\/|\/shorts\/)[0-9A-Za-z_-]{11}(?=\b\S*$)/)?.[0];
 		elem.href = id? 'https://youtu.be/'+id: text;
 		elem.textContent = text;
 		if(id) {
-			fetch('https://noembed.com/embed?url='+elem.href).then(x => x.json()).then(x => elem.textContent = x.error ?? x.title);
+			fetch('https://noembed.com/embed?url='+elem.href).then(x => x.json()).then(x => elem.textContent = x.error ?? x.title ?? text);
 			elem.onclick = e => {
 				e.preventDefault();
 				get('video').style.aspectRatio = text.includes('/shorts/')? '9 / 16': '16 / 9';
 				get('video').classList.remove('hidden');
 				get('video').src = 'https://www.youtube-nocookie.com/embed/'+id;
-				get('video').scrollIntoView();
 			}
 		} else {
 			elem.target = '_blank';
@@ -297,7 +304,7 @@ const create = (text, type) => {
 		elem = document.createElement('span');
 		elem.append(...parse(text));
 	}
-	elem.className = type;
+	elem.classList.add(type);
 	return elem;
 }
 const types = [['color', '##'], ['big', '<>'], ['small', '><'], ['super', '^^'], ['sub', '~~'], ['bold', '**'], ['italic', '//'], ['code', '{}'], ['link', '__'], ['img', '::'], ['form', '[]']];
@@ -328,12 +335,12 @@ onresize = () => {
 	}
 }
 const preview = () => {
-	if(get('msg').value[0] == '/') {
-		get('msg').classList.add('code');
+	if(get('msgbox').value[0] == '/') {
+		get('msgbox').classList.add('code');
 	} else {
-		get('msg').classList.remove('code');
+		get('msgbox').classList.remove('code');
 	}
-	get('preview').replaceChildren(...parse(get('msg').value));
+	get('preview').replaceChildren(...parse(get('msgbox').value));
 }
 get('scrolldown').onclick = () => {
 	get('middle').scrollTop = get('middle').scrollHeight;
@@ -346,14 +353,14 @@ for(const [type, chars] of types) {
 	button.disabled = true;
 	get('buttons').append(button);
 	button.onclick = () => {
-		const start = get('msg').selectionStart;
-		const end = get('msg').selectionEnd;
-		const text = get('msg').value;
-		get('msg').focus();
+		const start = get('msgbox').selectionStart;
+		const end = get('msgbox').selectionEnd;
+		const text = get('msgbox').value;
+		get('msgbox').focus();
 		const color = chars == '##'? get('colorpicker').value: '';
-		get('msg').value = text.slice(0, start) + '['+color+chars[0]+text.slice(start, end)+chars[1]+']' + text.slice(end);
-		get('msg').setSelectionRange(start+color.length+chars[0].length+1, end+color.length+chars[0].length+1);
-		get('msg').oninput();
+		get('msgbox').value = text.slice(0, start) + '['+color+chars[0]+text.slice(start, end)+chars[1]+']' + text.slice(end);
+		get('msgbox').setSelectionRange(start+color.length+chars[0].length+1, end+color.length+chars[0].length+1);
+		get('msgbox').oninput();
 	};
 }
 get('colorpicker').oninput = () => {
@@ -361,8 +368,8 @@ get('colorpicker').oninput = () => {
 };
 const msgs = [''];
 let index = 0;
-get('msg').oninput = () => {
-	msgs[index] = get('msg').value;
+get('msgbox').oninput = () => {
+	msgs[index] = get('msgbox').value;
 	msgs.length = index+1;
 	preview();
 };
@@ -404,7 +411,6 @@ for(const [id, url] of [['room', 'https://cdn.pixabay.com/audio/2022/03/10/audio
 	}
 	button.onclick = () => audios[id].play();
 }
-const socket = io();
 socket.on('connect', () => {
 	get('status').value = '';
 	if(action) {
@@ -426,42 +432,23 @@ socket.on('disconnect', e => {
 	}
 });
 
-const buffers = [];
+const pending = new Set();
 const showfiles = files => {
 	for(const file of files) {
+		pending.add(file);
 		const url = URL.createObjectURL(file);
 		const img = new Image();
 		img.src = url;
-		get('images').append(img);
-		img.onload = () => {
+		get('newimages').append(img);
+		img.onerror = img.onclick = () => {
 			URL.revokeObjectURL(url);
-			file.arrayBuffer().then(buffer => {
-				const index = buffers.length;
-				buffers[index] = buffer;
-				img.onclick = () => {
-					buffers.splice(index, 1);
-					img.remove();
-				};
-			});
-		};
-		img.onerror = () => {
-			URL.revokeObjectURL(url);
+			pending.delete(file);
 			img.remove();
 		};
 	}
 };
-const filenames = new Set();
-get('upload').onclick = () => {
-	filenames.forEach(filename => {
-		const img = new Image();
-		img.src = '/uploads/'+filename;
-		get('images').append(img);
-		img.id = filename;
-		img.onclick = () => {
-			socket.emit('remove', filename);
-			img.classList.add('deleted');
-		};
-	});
+get('admin').onclick = () => {
+	socket.emit('getfilenames');
 	get('dialog').showModal();
 	get('login')?.focus();
 	ondragover = e => {
@@ -475,59 +462,72 @@ get('upload').onclick = () => {
 	};
 	get('dialog').onclick = e => {
 		if(e.target == get('dialog')) {
-			get('cancel').onclick();
-			get('dialog').close();
+			get('cancel').click();
 		}
 	};
+};
+socket.on('getfilenames', filenames => {
+	get('upload').value = 'upload';
+	get('upload').disabled = false;
+	get('oldimages').textContent = '';
+	for(const filename of filenames) {
+		const label = document.createElement('label');
+		label.classList.add('label'+filename.match(/\/(.*)\./)?.[1]);
+		label.dataset.filename = filename;
+		const checkbox = document.createElement('input');
+		checkbox.type = 'checkbox';
+		const img = new Image();
+		img.src = '/uploads/'+filename;
+		img.onclick = () => {
+			socket.emit('delete', filename);
+		};
+		label.append(img, checkbox);
+		get('oldimages').append(label);
+	}
+});
+socket.on('delete', hash => {
+	document.querySelectorAll('.label'+hash).forEach(label => label.remove());
+	document.querySelectorAll('.img'+hash).forEach(img => img.src = 'about:invalid');
+});
+get('cancel').onclick = () => {
+	get('dialog').close();
+	get('newimages').textContent = '';
+	get('upload').value = 'upload';
+	get('upload').disabled = false;
+	pending.clear();
+};
+get('upload').onclick = () => {
+	get('cancel').focus();
+	get('upload').value = 'uploading...';
+	get('upload').disabled = true;
+	socket.emit('upload', [...pending]);
+	pending.clear();
+};
+get('share').onclick = () => {
+	for(const label of document.querySelectorAll('#oldimages > label:has(:checked)')) {
+		get('msgbox').value += '[:'+label.dataset.filename+':]';
+	}
+	get('cancel').click();
+	get('msgbox').focus();
+	get('msgbox').oninput();
 };
 get('loginform').onsubmit = () => {
 	socket.emit('login', get('login').value);
 };
 socket.once('login', () => {
 	get('loginform').remove();
-	get('cancel').disabled = get('share').disabled = false;
 });
-let timeout;
-get('cancel').onclick = () => {
-	clearTimeout(timeout);
-	get('dialog').close();
-	get('images').textContent = '';
-	get('share').value = 'upload';
-	get('share').disabled = false;
-	buffers.length = 0;
-};
-get('share').onclick = () => {
-	get('cancel').focus();
-	get('share').value = 'uploading...';
-	get('share').disabled = true;
-	timeout = setTimeout(() => {
-		socket.emit('upload', buffers);
-		get('cancel').onclick();
-	}, 5000);
-};
-socket.on('getfilenames', newfilenames => {
-	newfilenames.forEach(filename => filenames.add(filename));
-	get('msg').value += newfilenames.map(filename => '[:'+filename+':]').join('\n');
-	get('msg').focus();
-	get('msg').oninput();
-});
-socket.on('remove', filename => {
-	filenames.delete(filename);
-	get(filename)?.remove();
-});
-
-socket.on('error', error => console.warn(error));
 
 socket.on('setcommands', commands => {
-	get('msg').onselectionchange = () => {
+	get('msgbox').onselectionchange = () => {
 		get('commands').textContent = '';
-		const msg = get('msg').value;
+		const msg = get('msgbox').value;
 		if(msg[0] != '/') return;
-		const msgwords = msg.slice(0, get('msg').selectionStart).split(' ');
+		const msgwords = msg.slice(0, get('msgbox').selectionStart).split(' ');
 		const index = msgwords.length-1;
 		for(let i = 0; i < commands.length; i++) {
 			const cmd = commands[i];
-			if(!cmd.startsWith(msgwords[0])) return;
+			if(!cmd.startsWith(msgwords[0])) continue;
 			const cmdwords = cmd.split(' ');
 			const b = document.createElement('b');
 			b.textContent = cmdwords[index];
@@ -542,14 +542,14 @@ socket.on('setcommands', commands => {
 				div.classList.add('clickable');
 				const space = cmdwords.length > 1? ' ': '';
 				div.onclick = () => {
-					get('msg').value = cmdwords[0]+space;
-					get('msg').focus();
-					get('msg').oninput();
+					get('msgbox').value = cmdwords[0]+space;
+					get('msgbox').focus();
+					get('msgbox').oninput();
 				};
 			}
 		}
 	}
-	get('msg').onselectionchange();
+	get('msgbox').onselectionchange();
 });
 
 get('join').onclick = () => {
@@ -567,28 +567,27 @@ get('join').onclick = () => {
 	get('join').remove();
 	get('roomform').classList.add('hidden');
 
-	let say = msg => socket.emit('say', msg);
 	get('msgform').onsubmit = e => {
-		const msg = get('msg').value;
+		const msg = get('msgbox').value;
 		if(!msg) return;
 		say(msg);
 		msgs[index] = msg;
 		msgs[++index] = '';
 		msgs.length = index+1;
-		get('msg').value = '';
-		get('msg').focus();
+		get('msgbox').value = '';
+		get('msgbox').focus();
 		preview();
 	};
-	get('msg').onkeydown = e => {
+	get('msgbox').onkeydown = e => {
 		if(e.key == 'Enter' && !e.shiftKey) {
 			get('send').click();
 			e.preventDefault();
 		}
 		if(e.ctrlKey) {
 			if(e.key == 'ArrowUp' && index > 0) {
-				get('msg').value = msgs[--index];
+				get('msgbox').value = msgs[--index];
 			} else if(e.key == 'ArrowDown' && index < msgs.length-1) {
-				get('msg').value = msgs[++index];
+				get('msgbox').value = msgs[++index];
 			} else return;
 			e.preventDefault();
 			preview();
@@ -599,11 +598,12 @@ get('join').onclick = () => {
 	let interval;
 	let count = 0;
 	socket.on('addmsgs', (msgs, side) => {
+		if(!msgs.length) return;
 		if(!audios.msg.muted && !document.hasFocus()) {
 			audios.msg.play();
 		}
+		let div;
 		for(const [msg, id, color] of msgs) {
-			let div;
 			if(id != undefined && get(side+id)) {
 				div = get(side+id);
 				div.replaceChildren(...parse(msg));
@@ -612,16 +612,8 @@ get('join').onclick = () => {
 				div.classList.add('msg');
 				div.append(...parse(msg));
 				get(side).append(div);
-				if(!getSelection().toString()) {
-					div.scrollIntoView();
-				}
 				if(id != undefined) {
 					div.id = side+id;
-				}
-				if(side == 'middle') {
-					get('scrolldown').replaceChildren(div.cloneNode(true));
-					clearTimeout(timeout);
-					timeout = setTimeout(() => get('scrolldown').replaceChildren('▼'), 3000);
 				}
 			}
 			if(color) {
@@ -643,6 +635,16 @@ get('join').onclick = () => {
 				div.append(button);
 			}
 		}
+		if(!getSelection().toString()) {
+			div.scrollIntoView();
+		}
+		if(side == 'middle') {
+			const clone = div.cloneNode(true);
+			clone.removeAttribute('id');
+			get('scrolldown').replaceChildren(clone);
+			clearTimeout(timeout);
+			timeout = setTimeout(() => get('scrolldown').replaceChildren('▼'), 3000);
+		}
 		clearInterval(interval);
 		if(document.hasFocus()) return;
 		count++;
@@ -653,7 +655,7 @@ get('join').onclick = () => {
 		};
 		animate();
 		interval = setInterval(animate, 1000);
-		onfocus = onmousemove = onvisibilitychange = () => {
+		onfocus = onmousemove = document.onvisibilitychange = () => {
 			if(document.hidden) return;
 			clearInterval(interval);
 			document.title = title;
@@ -691,7 +693,7 @@ get('join').onclick = () => {
 		if(innerHeight > 600) {
 			get('roomsettings').open = true;
 		}
-		get('code').value = `
+		get('codebox').value = `
 			const defaultnames = ['Maka', 'Lea', 'Kawena', 'Kekoa', 'Waiola', 'Hanalei', 'Kamalani', 'Malina', 'Kanakanui', 'Lilinoe', 'Momi', 'Waipuna', 'Makoa', 'Kalei', 'Loke', 'Ululani', 'Kona', 'Kamaile', 'Maluhia', 'Leinani', 'Kaleinani', 'Mana', 'Kapuni', 'Kealoha', 'Kiele', 'Kulamanu', 'Mokihana', 'Kapono', 'Maunakea', 'Pauahi', 'Kaliko', 'Lei', 'Keola', 'Hualani', 'Kamalu', 'Makana', 'Haunani', 'Kaulana', 'Keahi', 'Kalua', 'Luana', 'Kainalu', 'Makanui', 'Kaimana', 'Punahele', 'Kanoa', 'Alana', 'Maile', 'Melia', 'Mililani', 'Keawe', 'Makai', 'Kailani', 'Momilani', 'Hina', 'Hanohano', 'Kalama', 'Nohea', 'Kainoa', 'Lani', 'Kapulani', 'Uluwehi', 'Kaipo', 'Onaona', 'Koa', 'Kanani', 'Lokelani', 'Pumehana', 'Lehua', 'Kekona', 'Kaluhi', 'Nahenahe', 'Lana', 'Kaihe', 'Puamana', 'Noelani', 'Kawai', 'Leihua', 'Kapua', 'Nani', 'Kaila', 'Puna', 'Kanamu', 'Mamo', 'Keona', 'Wailani', 'Ikaika', 'Aloha', 'Akoni', 'Kawelo', 'Kiani', 'Kamaka', 'Nanea', 'Mahina', 'Kahiau', 'Hekili', 'Hiapo', 'Lono', 'Kaina', 'Pua', 'Kini', 'Kaleo', 'Makamae', 'Kalena', 'Ipo', 'Leilani', 'Kahula', 'Pali', 'Leimamo', 'Keao', 'Manuia', 'Lanakila', 'Palikapu', 'Hiwahiwa', 'Kilohana', 'Keilani', 'Anuhea', 'Kalani'];
 			onjoin = user => {
 				user.name = user.defaultname = defaultnames.shift();
@@ -723,8 +725,8 @@ get('join').onclick = () => {
 					users.send('[*'+user.name+'*]: '+msg);
 				}
 			}`.slice(1).replace(/^\t{3}/gm, '');
-		get('code').setSelectionRange(0, 0);
-		get('code').focus();
+		get('codebox').setSelectionRange(0, 0);
+		get('codebox').focus();
 		const codes = [];
 		let worker;
 		const run = code => {
@@ -775,24 +777,22 @@ get('join').onclick = () => {
 				}
 				const users = new Users();
 				${ code };
-				onmessage = ({ data }) => {
-					const event = data.shift();
-					const id = data.shift();
+				onmessage = ({ data:[event, id, arg] }) => {
 					let user = users.get(id);
 					if(event == 'onjoin') {
-						user = new User(id, data);
+						user = new User(id, arg);
 						users.push(user);
 						this.onjoin?.(user);
 					} else if(!user) {
 						throw Error(event+' failed: '+id+' not found');
 					} else if(event == 'onleave') {
 						users.splice(users.findIndex(user => user.id == id), 1);
-						this.onleave?.(user, data);
+						this.onleave?.(user, arg);
 					} else if(event == 'onhear') {
 						let cmd = '';
-						let msg = data;
-						if(data[0] == '/') {
-							[cmd, msg = ''] = data.slice(1).split(/ (.*)/);
+						let msg = arg;
+						if(arg[0] == '/') {
+							[cmd, msg = ''] = arg.slice(1).split(/ (.*)/);
 						}
 						this.onhear?.(user, cmd, msg);
 					} else {
@@ -806,7 +806,7 @@ get('join').onclick = () => {
 				socket.emit(...e.data);
 			};
 			worker.onerror = e => {
-				get('code').classList.add('error');
+				get('codebox').classList.add('error');
 				codes.pop();
 				if(codes.length) {
 					run(codes.at(-1));
@@ -815,18 +815,18 @@ get('join').onclick = () => {
 			socket.emit('clear', [...users.keys()], ['top', 'right', 'bottom', 'left', 'middle']);
 			users.forEach((hash, id) => worker.postMessage(['onjoin', id, hash]));
 		};
-		run(get('code').value);
-		get('code').oninput = () => {
-			get('code').classList.remove('error');
+		run(get('codebox').value);
+		get('codebox').oninput = () => {
+			get('codebox').classList.remove('error');
 		};
 		get('codeform').onsubmit = e => {
-			run(get('code').value);
-			get('code').focus();
+			run(get('codebox').value);
+			get('codebox').focus();
 		};
 		onkeydown = e => {
 			if(e.key == 's' && e.ctrlKey) {
 				e.preventDefault();
-				run(get('code').value);
+				run(get('codebox').value);
 			}
 		};
 		say = msg => {
@@ -835,7 +835,7 @@ get('join').onclick = () => {
 		};
 		const inputs = [...document.querySelectorAll('#colors > input[type="color"]')];
 		get('colorform').onsubmit = e => {
-			socket.emit('setcolors', [...users.keys()], inputs.map(input => input.value));
+			socket.emit('setcolors', inputs.map(input => input.value));
 		};
 		get('passwordform').onsubmit = e => {
 			socket.emit('setpassword', get('password').value);
@@ -879,7 +879,7 @@ get('join').onclick = () => {
 			if(a.target.type != 'color') return;
 			onmouseup = b => {
 				onmouseup = null;
-				if(a.target.type != 'color') return;
+				if(b.target.type != 'color') return;
 				[a.target.value, b.target.value] = [b.target.value, a.target.value];
 				update(a);
 				update(b);
@@ -889,7 +889,7 @@ get('join').onclick = () => {
 
 	socket.once('join', cmds => {
 		socket.removeAllListeners('host');
-		get('msg').focus();
+		get('msgbox').focus();
 	});
 }
 socket.once('hi', async (rooms, key) => {
@@ -951,7 +951,7 @@ socket.once('hi', async (rooms, key) => {
 			get('join').value = 'host '+here;
 		}
 		rooms[name]?.remove();
-		delete rooms[name];
+		rooms.delete(name);
 	});
 
 	if(!('serviceWorker' in navigator)) return;
@@ -969,11 +969,11 @@ socket.once('hi', async (rooms, key) => {
 	let subscribed = checkbox.checked = Boolean(subscription);
 	const channel = new BroadcastChannel('subscription');
 	channel.onmessage = ({ data }) => {
-		if(subscribed in data) {
+		if('subscribed' in data) {
 			checkbox.checked = data.subscribed;
-		} else if(start in data) {
+		} else if('start' in data) {
 			start.value = data.start;
-		} else if(end in data) {
+		} else if('end' in data) {
 			end.value = data.end;
 		}
 	};
@@ -989,20 +989,20 @@ socket.once('hi', async (rooms, key) => {
 				userVisibleOnly:true,
 				applicationServerKey:Uint8Array.fromBase64(key, { alphabet:'base64url' })
 			});
-			socket.emit('subscribe', subscription, start.value, end.value, Date.now());
-			subscribed = false;
+			socket.emit('subscribe', subscription, start.value, end.value, new Date().getTimezoneOffset());
+			subscribed = true;
 		} else if(!checkbox.checked && subscription) {
 			socket.emit('unsubscribe', subscription.endpoint);
 			subscription.unsubscribe();
 			subscription = null;
-			subscribed = true;
+			subscribed = false;
 		}
 		channel.postMessage({ subscribed });
 		checkbox.disabled = false;
 	};
 	start.oninput = end.oninput = () => {
 		if(subscribed) {
-			fetch('/subscribe', { ...options, body:JSON.stringify([subscription, start.value, end.value]) });
+			fetch('/subscribe', { method:'POST', headers:{ 'Content-Type': 'application/json' }, body:JSON.stringify([subscription, start.value, end.value]) });
 		}
 		channel.postMessage({ start:start.value, end:end.value });
 	};
