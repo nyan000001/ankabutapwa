@@ -1,5 +1,4 @@
 require('dotenv').config();
-const { randomBytes } = require('crypto');
 const express = require('express');
 const app = express();
 const webpush = require('web-push');
@@ -8,11 +7,11 @@ const subscriptions = new Map();
 const notify = (title, body, arrs) => {
 	const payload = JSON.stringify({ title, body });
 	const options = { TTL:60 };
-	let time = new Date();
-	time = time.getHours()*60+time.getMinutes();
-	for(const [sub, start, end] of arrs) {
-		if(start < end && (time < start || time > end)) continue;
-		if(start > end && (time > start || time < end)) continue;
+	for(const [sub, start, end, offset] of arrs) {
+		const time = new Date(Date.now()-offset*60000);
+		const mins = time.getUTCHours()*60 + time.getUTCMinutes();
+		if(start < end && (mins < start || mins > end)) continue;
+		if(start > end && mins < start && mins > end) continue;
 		webpush.sendNotification(sub, payload, options).catch(error => {
 			if(error.statusCode == 404 || error.statusCode == 410) {
 				subscriptions.delete(sub.endpoint);
@@ -24,18 +23,19 @@ const crypto = require('crypto');
 const fs = require('fs');
 fs.rmSync(__dirname+'/public/uploads', { recursive:true, force:true });
 fs.mkdirSync(__dirname+'/public/uploads');
+app.use('/uploads', express.static(__dirname+'/public/uploads', { setHeaders:res => res.set('Cache-Control', 'no-store') }));
 app.use(express.static(__dirname+'/public'));
 const server = require('http').createServer(app);
-const io = require('socket.io')(server, { connectionStateRecovery:{ maxDisconnectionDuration:60000, skipMiddlewares:true } });
+const io = require('socket.io')(server, { maxHttpBufferSize:20e6, connectionStateRecovery:{ maxDisconnectionDuration:60000, skipMiddlewares:true } });
 const defaultcolors = ['#ccc', '#000', '#fff', '#000', '#eee', '#000'];
 const rooms = new Map([
 	['lobby', {
 		users:new Map(), password:'', colors:defaultcolors, msgs:[], emit:function (action, userid, ...args) {
 			const user = this.users.get(userid);
 			if(action == 'adduser') {
-				io.to('?lobby').emit('addmsgs', [...this.users.keys()].map(userid2 => [userid2.toString(), userid2.toString()]), 'right');
+				io.to('?lobby').emit('addmsgs', [...this.users.keys()].map(userid2 => [userid2, userid2]), 'right');
 				const limit = Date.now() - 30000000;
-				user.emit('addmsgs', this.msgs.filter((msg, time) => time < limit).map(msg => msg), 'middle');
+				user.emit('addmsgs', this.msgs.filter(msg => msg[1] > limit).map(msg => [msg[0]]), 'middle');
 			} else if(action == 'removeuser') {
 				io.to('?lobby').emit('removemsgs', [[userid]], 'right');
 			} else if(action == 'online') {
@@ -50,7 +50,10 @@ const rooms = new Map([
 					if(cmd == '/kick') {
 						if(user.data.admin) {
 							for(const userid2 of args) {
-								this.users.get(parseInt(userid2))?.kick?.('kicked by '+userid);
+								const socket2 = this.users.get(parseInt(userid2));
+								if(!socket2) continue;
+								socket2.kick?.('kicked by '+userid);
+								socket2.leave('?lobby');
 							}
 						} else {
 							error('only admins can kick');
@@ -58,9 +61,9 @@ const rooms = new Map([
 					} else if(cmd == '/pm') {
 						const user2 = this.users.get(parseInt(args[0]));
 						if(user2) {
-							const msg = '[/[*'+userid+' > '+args[0]+'*]: '+args[1]+'/]';
-							user.emit('addmsgs', [['[/[*(to '+args[0]+') '+userid+'*]: '+args[1]+'/]']], 'middle');
-							user2.emit('addmsgs', [['[/[*(to you) '+userid+'*]: '+args[1]+'/]']], 'middle');
+							const msg = args.slice(1).join(' ');
+							user.emit('addmsgs', [['[/[*(to '+args[0]+') '+userid+'*]: '+msg+'/]']], 'middle');
+							user2.emit('addmsgs', [['[/[*(to you) '+userid+'*]: '+msg+'/]']], 'middle');
 						} else {
 							error('no such user');
 						}
@@ -86,7 +89,10 @@ const rooms = new Map([
 					user.leave('?'+user.data.index);
 				}
 				user.data.index = index < 0? this.questions.length - 1: index % this.questions.length;
-				user.emit('addmsgs', [[this.questions[user.data.index][0], 'question']], 'top');
+				const question = this.questions[user.data.index];
+				user.emit('addmsgs', [[question[0], 'question']], 'top');
+				user.emit('addmsgs', question.slice(1).map(answer => [answer]), 'middle');
+				user.join('?'+user.data.index);
 			}
 			if(action == 'adduser') {
 				ask(Math.random()*this.questions.length|0);
@@ -101,10 +107,10 @@ const rooms = new Map([
 						ask(user.data.index-1);
 					} else if(cmd == '/ask') {
 						const question = args.join(' ');
-						user.data.index = this.questions.length;
-						this.questions[user.data.index] = [user.data.question];
-						user.emit('addmsgs', [[question, 'question']], 'top');
-						user.join('?'+user.data.index);
+						if(!question) return;
+						const index = this.questions.length;
+						this.questions[index] = [question];
+						ask(index);
 					} else {
 						user.emit('addmsgs', [['invalid command']], 'middle');
 					}
@@ -112,11 +118,7 @@ const rooms = new Map([
 					const question = this.questions[user.data.index];
 					msg = question.length+' '+msg;
 					question.push(msg);
-					if(!user.rooms.has('?'+user.data.index)) {
-						user.emit('addmsgs', question.slice(1).map(answer => [answer]), 'middle');
-					}
 					io.to('?'+user.data.index).emit('addmsgs', [[msg]], 'middle');
-					user.join('?'+user.data.index);
 				}
 			}
 		}
@@ -126,7 +128,11 @@ const hashes = new Map();
 const timeouts = new Map();
 io.on('connection', socket => {
 	if(socket.data.dead) return;
-	const roomname = decodeURI(socket.handshake.headers.referer).match(/\?(.+)/)?.[1] || 'lobby';
+	let roomname = 'lobby';
+	try {
+		const query = new URL(socket.handshake.headers.referer).search.slice(1);
+		if(query) roomname = decodeURI(query);
+	} catch {}
 	let room = rooms.get(roomname);
 	const get = userid => {
 		if(userid == 0 && room.emit) {
@@ -146,7 +152,7 @@ io.on('connection', socket => {
 		let hash = hashes.get(ip);
 		if(!hash) {
 			const takenhashes = new Set(hashes.values());
-			do hash = randomBytes(16).toString('hex');
+			do hash = crypto.randomBytes(16).toString('base64url');
 			while(takenhashes.has(hash));
 			hashes.set(ip, hash);
 		}
@@ -155,6 +161,10 @@ io.on('connection', socket => {
 	if(socket.data.userid == undefined) {
 		socket.on('join', password => {
 			room = rooms.get(roomname);
+			if(!room) {
+				socket.emit('error', 'room not found');
+				return;
+			}
 			if(password != room.password) {
 				socket.emit('error', 'wrong password');
 				return;
@@ -163,10 +173,6 @@ io.on('connection', socket => {
 			socket.removeAllListeners('host');
 			if(roomname == 'lobby') {
 				socket.join('?lobby');
-			}
-			if(!room) {
-				socket.emit('error', 'room not found');
-				return;
 			}
 			let userid = 1;
 			while(room.users.has(userid)) {
@@ -187,7 +193,7 @@ io.on('connection', socket => {
 			socket.removeAllListeners('host');
 			socket.data.userid = 0;
 			socket.emit('host', socket.data.hash);
-			room = { users:new Map([[0, socket]]), password:'', colors:defaultcolors };
+			room = { users:new Map(), password:'', colors:defaultcolors };
 			rooms.set(roomname, room);
 			io.emit('addroom', roomname, { count:1, locked:false, colors:room.colors });
 			notify('new room', roomname, [...subscriptions.values()]);
@@ -208,6 +214,7 @@ io.on('connection', socket => {
 		const userid = socket.data.userid;
 		room.users.set(userid, socket);
 		socket.on('say', msg => {
+			if(typeof msg != 'string') return;
 			get(0).emit('hear', userid, msg);
 		});
 		const die = reason => {
@@ -228,6 +235,8 @@ io.on('connection', socket => {
 			}
 		});
 		socket.kick = reason => {
+			clearTimeout(timeouts.get(socket.id));
+			timeouts.delete(socket.id);
 			socket.emit('kick', reason);
 			socket.removeAllListeners('say');
 			socket.removeAllListeners('disconnect');
@@ -237,7 +246,9 @@ io.on('connection', socket => {
 		}
 	}
 	function host() {
+		room.users.set(0, socket);
 		socket.on('kick', userids => {
+			if(!Array.isArray(userids)) return;
 			for(const userid of userids) {
 				get(userid)?.kick?.('kicked');
 			}
@@ -255,26 +266,30 @@ io.on('connection', socket => {
 			reason.includes('disconnect')? die(): timeouts.set(socket.id, setTimeout(die, 30000));
 		});
 		socket.on('send', (userids, msgs, side) => {
+			if(!Array.isArray(userids)) return;
 			for(const userid of userids) {
 				get(userid)?.emit('addmsgs', msgs, side);
 			}
 		});
 		socket.on('unsend', (userids, msgids, side) => {
+			if(!Array.isArray(userids)) return;
 			for(const userid of userids) {
 				get(userid)?.emit('removemsgs', msgids, side);
 			}
 		});
 		socket.on('clear', (userids, sides) => {
+			if(!Array.isArray(userids)) return;
 			for(const userid of userids) {
 				get(userid)?.emit('clear', sides);
 			}
 		});
 		socket.on('setcommands', (userids, commands) => {
+			if(!Array.isArray(userids)) return;
 			for(const userid of userids) {
-				io.emit('setcommands', commands);
+				get(userid)?.emit('setcommands', commands);
 			}
 		});
-		socket.on('setcolors', (userids, colors) => {
+		socket.on('setcolors', colors => {
 			room.colors = colors;
 			io.emit('setcolors', roomname, colors);
 		});
@@ -283,46 +298,67 @@ io.on('connection', socket => {
 			io.emit('setlock', roomname, Boolean(password));
 		});
 	}
+	const sendfilenames = () => {
+		const path = __dirname + '/public/uploads/'+socket.data.hash;
+		socket.emit('getfilenames', fs.existsSync(path)? fs.readdirSync(path, { withFileTypes: true }).map(item => socket.data.hash+'/'+item.name): []);
+	}
+	socket.on('getfilenames', sendfilenames);
 	socket.on('upload', arrayBuffers => {
 		if(!socket.data.admin) {
 			socket.emit('error', 'log in to send images');
 			return;
 		}
-		const filenames = [];
-		for(const arrayBuffer of arrayBuffers) {
-			buffer = Buffer.from(arrayBuffer);
+		if(!Array.isArray(arrayBuffers)) return;
+		const path = __dirname+'/public/uploads/';
+		fs.mkdirSync(path+socket.data.hash, { recursive: true });
+		const files = [];
+		for(const buffer of arrayBuffers) {
+			if(!Buffer.isBuffer(buffer)) continue;
 			const extension =
 				buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF ? 'jpg' :
 				buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])) ? 'png' :
 				buffer.subarray(0, 6).equals(Buffer.from('GIF87a')) || buffer.subarray(0, 6).equals(Buffer.from('GIF89a')) ? 'gif' :
 				buffer.subarray(0, 4).equals(Buffer.from('RIFF')) && buffer.subarray(8, 12).equals(Buffer.from('WEBP')) ? 'webp' :
 				null;
-			if(!extension) return;
-			const filename = crypto.createHash('sha256').update(buffer).digest('hex')+'.'+extension;
-			const path = __dirname+'/public/uploads/'+filename;
-			fs.writeFile(path, buffer, () => {
-				setTimeout(() => fs.rm(path, { force:true }, () => {}), 24*60*60*1000);
-			});
-			filenames.push(filename);
+			if(!extension) continue;
+			const filename = socket.data.hash+'/'+crypto.createHash('sha256').update(buffer).digest('base64url')+'.'+extension;
+			fs.writeFileSync(path+filename, buffer);
+			files.push(path+filename);
 		}
-		socket.emit('getfilenames', filenames);
+		sendfilenames();
+		if(files.length) {
+			setTimeout(() => files.forEach(file => fs.rmSync(file, { force: true })), 24*60*60*1000);
+		}
 	});
-	socket.on('remove', filename => {
+	socket.on('delete', filename => {
+		if(typeof filename != 'string') return;
+		const match = filename.match(/^([\w-]+)\/([\w-]+)\.([\w-]+)$/);
+		if(!match) return;
+		if(match[1] != socket.data.hash) return;
 		fs.rm(__dirname+'/public/uploads/'+filename, { force:true }, error => {
 			if(error) {
-				socket.emit('error', error);
+				socket.emit('error', error.message);
 			} else {
-				socket.emit('remove', filename);
+				if(socket.data.userid == undefined) {
+					socket.emit('delete', match[2]);
+				} else {
+					for(const userid of room.users.keys()) {
+						get(userid)?.emit('delete', match[2]);
+					}
+				}
 			}
 		});
 	});
-	socket.on('subscribe', (sub, start, end, time) => {
-		const diff = Date.now()-time;
+	socket.on('subscribe', (sub, start, end, offset) => {
+		if(typeof sub?.endpoint != 'string') return;
+		if(typeof start != 'string') return;
+		if(typeof end != 'string') return;
+		if(typeof offset != 'number' || !Number.isFinite(offset)) return;
 		const convert = time => {
 			const [h, min] = time.split(':').map(Number);
-			return h*60+min+diff;
+			return h*60+min;
 		}
-		const arr = [sub, convert(start), convert(end)];
+		const arr = [sub, convert(start), convert(end), offset];
 		subscriptions.set(sub.endpoint, arr);
 		notify('test', 'boo!', [arr]);
 	});
